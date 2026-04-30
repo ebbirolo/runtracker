@@ -64,6 +64,16 @@ class RunTracker {
     document.getElementById('cancelSaveBtn').addEventListener('click', () => this.hideModals());
     document.getElementById('circuitMode').addEventListener('click', () => this.setMode('circuit'));
     document.getElementById('trackMode').addEventListener('click', () => this.setMode('track'));
+    document.getElementById('newRunBtn').addEventListener('click', () => this.startRun());
+    document.getElementById('markSectorBtn').addEventListener('click', () => this.markSector());
+    document.getElementById('exportDataBtn').addEventListener('click', () => this.exportData());
+    document.getElementById('clearDataBtn').addEventListener('click', () => this.clearData());
+    document.getElementById('darkModeToggle').addEventListener('change', (e) => this.toggleDarkMode(e));
+    document.getElementById('manualSectorToggle').addEventListener('change', (e) => this.toggleManualSectors(e));
+    document.getElementById('cancelModeBtn').addEventListener('click', () => this.hideModals());
+    document.getElementById('selectCircuitBtn').addEventListener('click', () => this.setMode('circuit'));
+    document.getElementById('selectTrackBtn').addEventListener('click', () => this.setMode('track'));
+    document.getElementById('backBtn').addEventListener('click', () => this.goHome());
   }
 
   setMode(mode) {
@@ -571,14 +581,16 @@ class RunTracker {
       list.innerHTML = '<li style="color:#8E8E93;justify-content:center;">No saved routes</li>';
     } else {
       list.innerHTML = routes.map(r => `
-        <li onclick="window.tracker.loadRoute(${r.id})">
-          <span>${r.name}</span>
-          <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
-        </li>
+        <li data-route-id="${r.id}" class="route-list-item">${r.name}</span>
+        <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
       `).join('');
+      list.querySelectorAll('.route-list-item').forEach(item => {
+        item.addEventListener('click', () => window.tracker.loadRoute(parseInt(item.dataset.routeId)));
+      });
     }
 
-    document.getElementById('loadModal').style.display = 'flex';
+    const loadModal = document.getElementById('loadModal') || document.getElementById('routeModal');
+    if (loadModal) loadModal.style.display = 'flex';
   }
 
   loadRoute(routeId) {
@@ -676,6 +688,65 @@ class RunTracker {
 
   setStatus(msg) {
     document.getElementById('statusBar').textContent = msg;
+  }
+
+  startRun() {
+    if (this.runMode === 'circuit') {
+      document.getElementById('modeModal').style.display = 'flex';
+    } else if (this.currentRoute) {
+      this.showLoadModal();
+    } else {
+      this.start();
+    }
+  }
+
+  markSector() {
+    if (!this.currentRoute) return;
+    this.currentSector++;
+    document.getElementById('sector1').textContent = this.sectors.s1 ? this.formatTime(Date.now() - this.sectorStartTime) : '--:--';
+    document.getElementById('sector2').textContent = this.sectors.s2 ? this.formatTime(Date.now() - this.sectorStartTime) : '--:--';
+    document.getElementById('sector3').textContent = this.sectors.s3 ? this.formatTime(Date.now() - this.sectorStartTime) : '--:--';
+  }
+
+  exportData() {
+    const data = {
+      runs: JSON.parse(localStorage.getItem('runHistory') || '[]'),
+      routes: JSON.parse(localStorage.getItem('routes') || '[]')
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `run-tracker-backup-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  clearData() {
+    if (confirm('Clear all run and route data?')) {
+      localStorage.removeItem('runHistory');
+      localStorage.removeItem('routes');
+      location.reload();
+    }
+  }
+
+  toggleDarkMode(e) {
+    document.body.style.backgroundColor = e.target.checked ? '#1C1C1E' : '#F2F2F7';
+    document.body.style.color = e.target.checked ? '#FFFFFF' : '#000000';
+  }
+
+  toggleManualSectors(e) {
+    this.manualSectorEnabled = e.target.checked;
+  }
+
+  goHome() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('homeScreen').classList.add('active');
+    this.loadSavedRoutes();
+  }
+
+  hideModals() {
+    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
   }
 }
 
