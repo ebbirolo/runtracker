@@ -1,1 +1,9 @@
 CLAUDE.md
+*.js
+*.css
+node_modules
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
