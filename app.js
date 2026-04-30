@@ -653,11 +653,60 @@ class RunTracker {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
   }
 
+  loadHistory() {
+    const runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
+    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
+
+    // Update home stats
+    document.getElementById('totalRuns').textContent = runs.length;
+    document.getElementById('totalDistance').textContent = (runs.reduce((sum, r) => sum + r.distance, 0) / 1000).toFixed(1);
+
+    const bestTimes = runs.filter(r => r.bestTime).map(r => r.bestTime);
+    if (bestTimes.length > 0) {
+      const minTime = Math.min(...bestTimes);
+      document.getElementById('bestTime').textContent = this.formatTime(minTime);
+    } else {
+      document.getElementById('bestTime').textContent = '--:--';
+    }
+
+    // Render saved routes
+    const routeList = document.getElementById('homeRouteList');
+    if (routes.length === 0) {
+      routeList.innerHTML = '<li style="color:#8E8E93;text-align:center;padding:12px;">No saved routes</li>';
+    } else {
+      routeList.innerHTML = routes.map(r => `
+        <li class="route-item" data-route-id="${r.id}">
+          <span class="route-name">${r.name}</span>
+          <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
+          ${r.bestTime ? `<span style="color:#34C759;font-size:12px;">Best: ${this.formatTime(r.bestTime)}</span>` : ''}
+        </li>
+      `).join('');
+      routeList.querySelectorAll('.route-item').forEach(item => {
+        item.addEventListener('click', () => this.loadRoute(parseInt(item.dataset.routeId)));
+      });
+    }
+
+    // Render recent runs
+    const runList = document.getElementById('homeRunList');
+    if (runs.length === 0) {
+      runList.innerHTML = '<li style="color:#8E8E93;text-align:center;padding:12px;">No runs yet</li>';
+    } else {
+      runList.innerHTML = runs.slice(0, 10).map(r => `
+        <li class="run-item">
+          <span class="run-name">${r.id}</span>
+          <span class="run-meta">${this.formatTime(r.time)} • ${(r.distance/1000).toFixed(2)}km</span>
+          ${r.laps.length > 0 ? `<span class="run-meta">Laps: ${r.laps.length}</span>` : ''}
+        </li>
+      `).join('');
+    }
+  }
+
   loadSavedRoutes() {
     const routes = JSON.parse(localStorage.getItem('routes') || '[]');
     if (routes.length > 0) {
       document.getElementById('saveRouteBtn').disabled = true;
     }
+    this.loadHistory();
   }
 
   haversineDistance(lat1, lon1, lat2, lon2) {
@@ -742,11 +791,7 @@ class RunTracker {
   goHome() {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('homeScreen').classList.add('active');
-    this.loadSavedRoutes();
-  }
-
-  hideModals() {
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    this.loadHistory();
   }
 }
 
