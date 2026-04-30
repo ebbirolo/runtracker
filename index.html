@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Run Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css">
+  <link rel="apple-touch-icon" href="icon.png">
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="overlay-container">
+    <div class="top-panel">
+      <div class="mode-selector">
+        <button id="circuitMode" class="mode-btn active">Circuit</button>
+        <button id="trackMode" class="mode-btn">Track</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat">
+          <span class="stat-label">Distance</span>
+          <span class="stat-value" id="distance">0.00</span>
+          <span class="stat-unit">km</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Time</span>
+          <span class="stat-value" id="time">00:00</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Pace</span>
+          <span class="stat-value" id="pace">--:--</span>
+          <span class="stat-unit">/km</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Speed</span>
+          <span class="stat-value" id="speed">0.0</span>
+          <span class="stat-unit">km/h</span>
+        </div>
+      </div>
+
+      <div class="sectors-panel" id="sectorsPanel">
+        <div class="sector">
+          <span class="sector-label">S1</span>
+          <span class="sector-value" id="sector1">--:--</span>
+        </div>
+        <div class="sector">
+          <span class="sector-label">S2</span>
+          <span class="sector-value" id="sector2">--:--</span>
+        </div>
+        <div class="sector">
+          <span class="sector-label">S3</span>
+          <span class="sector-value" id="sector3">--:--</span>
+        </div>
+      </div>
+
+      <div class="split-display" id="splitDisplay">
+        <span id="splitText">--</span>
+      </div>
+
+      <div class="status-bar" id="statusBar">Ready</div>
+    </div>
+
+    <div class="bottom-panel">
+      <div class="controls">
+        <button id="startBtn" class="btn btn-start">Start</button>
+        <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
+        <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
+      </div>
+
+      <div class="route-controls">
+        <button id="saveRouteBtn" class="btn btn-secondary" disabled>Save Route</button>
+        <button id="loadRouteBtn" class="btn btn-secondary">Load Route</button>
+      </div>
+
+      <div class="lap-display" id="lapDisplay" style="display:none;">
+        <span class="lap-label">Lap</span>
+        <span class="lap-value" id="lapCount">0</span>
+        <span class="lap-label">Best:</span>
+        <span class="lap-value" id="bestLap">--:--</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="routeModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h3>Select Route</h3>
+      <ul id="routeList"></ul>
+      <button id="closeModalBtn" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <div id="saveModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h3>Save Route</h3>
+      <input type="text" id="routeName" placeholder="Route name" class="input-field">
+      <button id="confirmSaveBtn" class="btn btn-start">Save</button>
+      <button id="cancelSaveBtn" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
