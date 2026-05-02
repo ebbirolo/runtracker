@@ -54,7 +54,7 @@ class RunTracker {
   }
 
   bindEvents() {
-    document.getElementById('startBtn').addEventListener('click', () => this.start());
+    document.getElementById('startBtn').addEventListener('click', () => this.startRun());
     document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
     document.getElementById('stopBtn').addEventListener('click', () => this.stop());
     document.getElementById('saveRouteBtn').addEventListener('click', () => this.showSaveModal());
@@ -740,10 +740,12 @@ class RunTracker {
   }
 
   startRun() {
-    if (this.runMode === 'circuit') {
-      document.getElementById('modeModal').style.display = 'flex';
-    } else if (this.currentRoute) {
+    if (this.currentRoute) {
       this.showLoadModal();
+    } else if (this.runMode === 'circuit') {
+      // For circuit mode without a saved route, start immediately
+      // User can choose mode again if they want track mode
+      this.start();
     } else {
       this.start();
     }
