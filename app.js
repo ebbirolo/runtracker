@@ -64,6 +64,10 @@ class RunTracker {
     document.getElementById('cancelSaveBtn').addEventListener('click', () => this.hideModals());
     document.getElementById('circuitMode').addEventListener('click', () => this.setMode('circuit'));
     document.getElementById('trackMode').addEventListener('click', () => this.setMode('track'));
+    document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
+    document.getElementById('closeSettingsBtn').addEventListener('click', () => this.hideModals());
+    document.getElementById('darkModeToggle').addEventListener('change', (e) => this.toggleDarkMode(e));
+    document.getElementById('clearDataBtn').addEventListener('click', () => this.clearAllData());
   }
 
   setMode(mode) {
@@ -676,6 +680,41 @@ class RunTracker {
 
   setStatus(msg) {
     document.getElementById('statusBar').textContent = msg;
+  }
+
+  showSettings() {
+    const modal = document.getElementById('settingsModal');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const isDarkMode = document.body.classList.contains('light-mode');
+    darkModeToggle.checked = !isDarkMode;
+    modal.style.display = 'flex';
+  }
+
+  hideModals() {
+    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+  }
+
+  toggleDarkMode(e) {
+    if (e.target.checked) {
+      document.body.classList.remove('light-mode');
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+      document.body.classList.add('light-mode');
+    }
+  }
+
+  clearAllData() {
+    if (confirm('Are you sure you want to delete all saved data? This cannot be undone.')) {
+      localStorage.removeItem('runHistory');
+      localStorage.removeItem('routes');
+      document.getElementById('clearDataBtn').textContent = 'Data deleted!';
+      document.getElementById('clearDataBtn').style.background = '#2EA44F';
+      setTimeout(() => {
+        document.getElementById('clearDataBtn').textContent = 'Delete All Data';
+        document.getElementById('clearDataBtn').style.background = '';
+      }, 3000);
+    }
   }
 }
 

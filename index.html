@@ -69,6 +69,7 @@
         <button id="startBtn" class="btn btn-start">Start</button>
         <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
         <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
+        <button id="settingsBtn" class="btn btn-settings" style="position:absolute;top:20px;right:20px;z-index:1000;">⚙️</button>
       </div>
 
       <div class="route-controls">
@@ -82,6 +83,16 @@
         <span class="lap-label">Best:</span>
         <span class="lap-value" id="bestLap">--:--</span>
       </div>
+    </div>
+  </div>
+
+  <!-- Full Screen Timer Overlay -->
+  <div id="fullscreenTimer" class="fullscreen-timer" style="display:flex;">
+    <div class="timer-bg"></div>
+    <div class="timer-content">
+      <div class="big-time" id="bigTimer">00:00</div>
+      <div class="big-distance" id="bigDistance">0.00 km</div>
+      <div class="big-status" id="bigStatus">Ready</div>
     </div>
   </div>
 
@@ -102,7 +113,48 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal" style="display:none;">
+    <div class="modal-content settings-modal">
+      <h3>Settings</h3>
+      <div class="setting">
+        <label class="toggle-label">Dark Mode</label>
+        <input type="checkbox" id="darkModeToggle" class="toggle-checkbox">
+      </div>
+      <div class="setting">
+        <label>Clear All Saved Data</label>
+        <button id="clearDataBtn" class="btn btn-stop" style="margin-top:10px;">Delete All Data</button>
+      </div>
+      <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
+  <script>
+    // Full screen timer updates
+    if (window.tracker) {
+      const originalUpdateTimer = window.tracker.updateTimer.bind(window.tracker);
+      window.tracker.updateTimer = function() {
+        const elapsed = Date.now() - window.tracker.startTime - window.tracker.totalPauseTime;
+        const bigTimer = document.getElementById('bigTimer');
+        if (elapsed > 0) {
+          bigTimer.textContent = window.tracker.formatTime(elapsed);
+        }
+        const bigDistance = document.getElementById('bigDistance');
+        bigDistance.textContent = (window.tracker.totalDistance / 1000).toFixed(2) + ' km';
+        originalUpdateTimer();
+      };
+    }
+
+    // Fullscreen timer toggle
+    document.getElementById('fullscreenTimer').addEventListener('click', () => {
+      if (document.getElementById('fullscreenTimer').style.display === 'flex') {
+        document.getElementById('fullscreenTimer').style.display = 'none';
+      } else {
+        document.getElementById('fullscreenTimer').style.display = 'flex';
+      }
+    });
+  </script>
 </body>
 </html>
