@@ -54,7 +54,7 @@ class RunTracker {
   }
 
   bindEvents() {
-    document.getElementById('startBtn').addEventListener('click', () => this.startRun());
+    document.getElementById('startBtn').addEventListener('click', () => this.start());
     document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
     document.getElementById('stopBtn').addEventListener('click', () => this.stop());
     document.getElementById('saveRouteBtn').addEventListener('click', () => this.showSaveModal());
@@ -64,16 +64,6 @@ class RunTracker {
     document.getElementById('cancelSaveBtn').addEventListener('click', () => this.hideModals());
     document.getElementById('circuitMode').addEventListener('click', () => this.setMode('circuit'));
     document.getElementById('trackMode').addEventListener('click', () => this.setMode('track'));
-    document.getElementById('newRunBtn').addEventListener('click', () => this.startRun());
-    document.getElementById('markSectorBtn').addEventListener('click', () => this.markSector());
-    document.getElementById('exportDataBtn').addEventListener('click', () => this.exportData());
-    document.getElementById('clearDataBtn').addEventListener('click', () => this.clearData());
-    document.getElementById('darkModeToggle').addEventListener('change', (e) => this.toggleDarkMode(e));
-    document.getElementById('manualSectorToggle').addEventListener('change', (e) => this.toggleManualSectors(e));
-    document.getElementById('cancelModeBtn').addEventListener('click', () => this.hideModals());
-    document.getElementById('selectCircuitBtn').addEventListener('click', () => this.setMode('circuit'));
-    document.getElementById('selectTrackBtn').addEventListener('click', () => this.setMode('track'));
-    document.getElementById('backBtn').addEventListener('click', () => this.goHome());
   }
 
   setMode(mode) {
@@ -581,16 +571,14 @@ class RunTracker {
       list.innerHTML = '<li style="color:#8E8E93;justify-content:center;">No saved routes</li>';
     } else {
       list.innerHTML = routes.map(r => `
-        <li data-route-id="${r.id}" class="route-list-item">${r.name}</span>
-        <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
+        <li onclick="window.tracker.loadRoute(${r.id})">
+          <span>${r.name}</span>
+          <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
+        </li>
       `).join('');
-      list.querySelectorAll('.route-list-item').forEach(item => {
-        item.addEventListener('click', () => window.tracker.loadRoute(parseInt(item.dataset.routeId)));
-      });
     }
 
-    const loadModal = document.getElementById('loadModal') || document.getElementById('routeModal');
-    if (loadModal) loadModal.style.display = 'flex';
+    document.getElementById('loadModal').style.display = 'flex';
   }
 
   loadRoute(routeId) {
@@ -653,60 +641,11 @@ class RunTracker {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
   }
 
-  loadHistory() {
-    const runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
-    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
-
-    // Update home stats
-    document.getElementById('totalRuns').textContent = runs.length;
-    document.getElementById('totalDistance').textContent = (runs.reduce((sum, r) => sum + r.distance, 0) / 1000).toFixed(1);
-
-    const bestTimes = runs.filter(r => r.bestTime).map(r => r.bestTime);
-    if (bestTimes.length > 0) {
-      const minTime = Math.min(...bestTimes);
-      document.getElementById('bestTime').textContent = this.formatTime(minTime);
-    } else {
-      document.getElementById('bestTime').textContent = '--:--';
-    }
-
-    // Render saved routes
-    const routeList = document.getElementById('homeRouteList');
-    if (routes.length === 0) {
-      routeList.innerHTML = '<li style="color:#8E8E93;text-align:center;padding:12px;">No saved routes</li>';
-    } else {
-      routeList.innerHTML = routes.map(r => `
-        <li class="route-item" data-route-id="${r.id}">
-          <span class="route-name">${r.name}</span>
-          <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
-          ${r.bestTime ? `<span style="color:#34C759;font-size:12px;">Best: ${this.formatTime(r.bestTime)}</span>` : ''}
-        </li>
-      `).join('');
-      routeList.querySelectorAll('.route-item').forEach(item => {
-        item.addEventListener('click', () => this.loadRoute(parseInt(item.dataset.routeId)));
-      });
-    }
-
-    // Render recent runs
-    const runList = document.getElementById('homeRunList');
-    if (runs.length === 0) {
-      runList.innerHTML = '<li style="color:#8E8E93;text-align:center;padding:12px;">No runs yet</li>';
-    } else {
-      runList.innerHTML = runs.slice(0, 10).map(r => `
-        <li class="run-item">
-          <span class="run-name">${r.id}</span>
-          <span class="run-meta">${this.formatTime(r.time)} • ${(r.distance/1000).toFixed(2)}km</span>
-          ${r.laps.length > 0 ? `<span class="run-meta">Laps: ${r.laps.length}</span>` : ''}
-        </li>
-      `).join('');
-    }
-  }
-
   loadSavedRoutes() {
     const routes = JSON.parse(localStorage.getItem('routes') || '[]');
     if (routes.length > 0) {
       document.getElementById('saveRouteBtn').disabled = true;
     }
-    this.loadHistory();
   }
 
   haversineDistance(lat1, lon1, lat2, lon2) {
@@ -737,63 +676,6 @@ class RunTracker {
 
   setStatus(msg) {
     document.getElementById('statusBar').textContent = msg;
-  }
-
-  startRun() {
-    if (this.currentRoute) {
-      this.showLoadModal();
-    } else if (this.runMode === 'circuit') {
-      // For circuit mode without a saved route, start immediately
-      // User can choose mode again if they want track mode
-      this.start();
-    } else {
-      this.start();
-    }
-  }
-
-  markSector() {
-    if (!this.currentRoute) return;
-    this.currentSector++;
-    document.getElementById('sector1').textContent = this.sectors.s1 ? this.formatTime(Date.now() - this.sectorStartTime) : '--:--';
-    document.getElementById('sector2').textContent = this.sectors.s2 ? this.formatTime(Date.now() - this.sectorStartTime) : '--:--';
-    document.getElementById('sector3').textContent = this.sectors.s3 ? this.formatTime(Date.now() - this.sectorStartTime) : '--:--';
-  }
-
-  exportData() {
-    const data = {
-      runs: JSON.parse(localStorage.getItem('runHistory') || '[]'),
-      routes: JSON.parse(localStorage.getItem('routes') || '[]')
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `run-tracker-backup-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  clearData() {
-    if (confirm('Clear all run and route data?')) {
-      localStorage.removeItem('runHistory');
-      localStorage.removeItem('routes');
-      location.reload();
-    }
-  }
-
-  toggleDarkMode(e) {
-    document.body.style.backgroundColor = e.target.checked ? '#1C1C1E' : '#F2F2F7';
-    document.body.style.color = e.target.checked ? '#FFFFFF' : '#000000';
-  }
-
-  toggleManualSectors(e) {
-    this.manualSectorEnabled = e.target.checked;
-  }
-
-  goHome() {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('homeScreen').classList.add('active');
-    this.loadHistory();
   }
 }
 
