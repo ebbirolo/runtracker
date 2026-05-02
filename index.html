@@ -13,165 +13,78 @@
 <body>
   <div id="map"></div>
 
-  <!-- Home Screen -->
-  <div id="homeScreen" class="screen active">
-    <div class="screen-content">
-      <h1 class="app-title">Run Tracker</h1>
+  <div class="overlay-container">
+    <div class="top-panel">
+      <div class="mode-selector">
+        <button id="circuitMode" class="mode-btn active">Circuit</button>
+        <button id="trackMode" class="mode-btn">Track</button>
+      </div>
 
-      <div class="home-stats" id="homeStats">
-        <div class="home-stat">
-          <span class="home-stat-value" id="totalRuns">0</span>
-          <span class="home-stat-label">Runs</span>
+      <div class="stats-grid">
+        <div class="stat">
+          <span class="stat-label">Distance</span>
+          <span class="stat-value" id="distance">0.00</span>
+          <span class="stat-unit">km</span>
         </div>
-        <div class="home-stat">
-          <span class="home-stat-value" id="totalDistance">0.0</span>
-          <span class="home-stat-label">Total km</span>
+        <div class="stat">
+          <span class="stat-label">Time</span>
+          <span class="stat-value" id="time">00:00</span>
         </div>
-        <div class="home-stat">
-          <span class="home-stat-value" id="bestTime">--:--</span>
-          <span class="home-stat-label">Best</span>
+        <div class="stat">
+          <span class="stat-label">Pace</span>
+          <span class="stat-value" id="pace">--:--</span>
+          <span class="stat-unit">/km</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Speed</span>
+          <span class="stat-value" id="speed">0.0</span>
+          <span class="stat-unit">km/h</span>
         </div>
       </div>
 
-      <button id="newRunBtn" class="btn btn-large btn-start">Start Run</button>
-
-      <div class="saved-routes" id="savedRoutesSection">
-        <h2>Saved Routes</h2>
-        <ul id="homeRouteList"></ul>
+      <div class="sectors-panel" id="sectorsPanel">
+        <div class="sector">
+          <span class="sector-label">S1</span>
+          <span class="sector-value" id="sector1">--:--</span>
+        </div>
+        <div class="sector">
+          <span class="sector-label">S2</span>
+          <span class="sector-value" id="sector2">--:--</span>
+        </div>
+        <div class="sector">
+          <span class="sector-label">S3</span>
+          <span class="sector-value" id="sector3">--:--</span>
+        </div>
       </div>
 
-      <div class="recent-runs">
-        <h2>Recent Runs</h2>
-        <ul id="homeRunList"></ul>
+      <div class="split-display" id="splitDisplay">
+        <span id="splitText">--</span>
       </div>
 
-      <nav class="bottom-nav">
-        <button class="nav-btn active" data-screen="home">Home</button>
-        <button class="nav-btn" data-screen="settings">Settings</button>
-      </nav>
+      <div class="status-bar" id="statusBar">Ready</div>
     </div>
-  </div>
 
-  <!-- Run Screen -->
-  <div id="runScreen" class="screen">
-    <div class="overlay-container">
-      <div class="top-panel">
-        <div class="mode-selector" id="modeSelector" style="display:none;">
-          <button id="circuitMode" class="mode-btn active">Circuit</button>
-          <button id="trackMode" class="mode-btn">Track</button>
-        </div>
-
-        <div class="stats-grid">
-          <div class="stat">
-            <span class="stat-label">Distance</span>
-            <span class="stat-value" id="distance">0.00</span>
-            <span class="stat-unit">km</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Time</span>
-            <span class="stat-value" id="time">00:00</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Pace</span>
-            <span class="stat-value" id="pace">--:--</span>
-            <span class="stat-unit">/km</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Speed</span>
-            <span class="stat-value" id="speed">0.0</span>
-            <span class="stat-unit">km/h</span>
-          </div>
-        </div>
-
-        <div class="sectors-panel" id="sectorsPanel" style="display:none;">
-          <div class="sector">
-            <span class="sector-label">S1</span>
-            <span class="sector-value" id="sector1">--:--</span>
-          </div>
-          <div class="sector">
-            <span class="sector-label">S2</span>
-            <span class="sector-value" id="sector2">--:--</span>
-          </div>
-          <div class="sector">
-            <span class="sector-label">S3</span>
-            <span class="sector-value" id="sector3">--:--</span>
-          </div>
-        </div>
-
-        <div class="split-display" id="splitDisplay" style="display:none;">
-          <span id="splitText">--</span>
-        </div>
-
-        <div class="status-bar" id="statusBar">Ready</div>
-
-        <button id="markSectorBtn" class="btn btn-sector" style="display:none;">Mark Sector</button>
+    <div class="bottom-panel">
+      <div class="controls">
+        <button id="startBtn" class="btn btn-start">Start</button>
+        <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
+        <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
       </div>
 
-      <div class="bottom-panel">
-        <div class="controls">
-          <button id="startBtn" class="btn btn-start">Start</button>
-          <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
-          <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
-        </div>
+      <div class="route-controls">
+        <button id="saveRouteBtn" class="btn btn-secondary" disabled>Save Route</button>
+        <button id="loadRouteBtn" class="btn btn-secondary">Load Route</button>
+      </div>
 
-        <div class="route-controls" id="routeControls" style="display:none;">
-          <button id="saveRouteBtn" class="btn btn-secondary" disabled>Save Route</button>
-        </div>
-
-        <div class="lap-display" id="lapDisplay" style="display:none;">
-          <span class="lap-label">Lap</span>
-          <span class="lap-value" id="lapCount">0</span>
-          <span class="lap-label">Best:</span>
-          <span class="lap-value" id="bestLap">--:--</span>
-        </div>
-
-        <button id="backBtn" class="btn btn-secondary" style="margin-top: 8px;">Back to Home</button>
+      <div class="lap-display" id="lapDisplay" style="display:none;">
+        <span class="lap-label">Lap</span>
+        <span class="lap-value" id="lapCount">0</span>
+        <span class="lap-label">Best:</span>
+        <span class="lap-value" id="bestLap">--:--</span>
       </div>
     </div>
   </div>
 
-  <!-- Settings Screen -->
-  <div id="settingsScreen" class="screen">
-    <div class="screen-content">
-      <h1 class="app-title">Settings</h1>
-
-      <div class="settings-section">
-        <h2>Appearance</h2>
-        <div class="setting-item">
-          <span class="setting-label">Dark Mode</span>
-          <label class="toggle">
-            <input type="checkbox" id="darkModeToggle" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <h2>Run Settings</h2>
-        <div class="setting-item">
-          <span class="setting-label">Manual Sector Marking</span>
-          <label class="toggle">
-            <input type="checkbox" id="manualSectorToggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <p class="setting-desc">Tap to mark sectors manually (max 3)</p>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <h2>Data</h2>
-        <button id="exportDataBtn" class="btn btn-secondary" style="width:100%;margin-bottom:8px;">Export Data</button>
-        <button id="clearDataBtn" class="btn btn-stop" style="width:100%;">Clear All Data</button>
-      </div>
-
-      <nav class="bottom-nav">
-        <button class="nav-btn" data-screen="home">Home</button>
-        <button class="nav-btn active" data-screen="settings">Settings</button>
-      </nav>
-    </div>
-  </div>
-
-  <!-- Route Selection Modal -->
   <div id="routeModal" class="modal" style="display:none;">
     <div class="modal-content">
       <h3>Select Route</h3>
@@ -180,23 +93,12 @@
     </div>
   </div>
 
-  <!-- Save Route Modal -->
   <div id="saveModal" class="modal" style="display:none;">
     <div class="modal-content">
       <h3>Save Route</h3>
       <input type="text" id="routeName" placeholder="Route name" class="input-field">
       <button id="confirmSaveBtn" class="btn btn-start">Save</button>
       <button id="cancelSaveBtn" class="btn btn-secondary">Cancel</button>
-    </div>
-  </div>
-
-  <!-- Mode Selection Modal -->
-  <div id="modeModal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <h3>Select Run Type</h3>
-      <button id="selectCircuitBtn" class="btn btn-large" style="margin-bottom:8px;">Circuit (Laps)</button>
-      <button id="selectTrackBtn" class="btn btn-large">Track (Single Route)</button>
-      <button id="cancelModeBtn" class="btn btn-secondary" style="margin-top:8px;">Cancel</button>
     </div>
   </div>
 
