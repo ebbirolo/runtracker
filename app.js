@@ -128,6 +128,9 @@ class RunTracker {
     if (this.currentRoute && this.currentRoute.ghost) {
       this.startGhostRun();
     }
+
+    // Show fullscreen timer when tracking starts
+    document.getElementById('fullscreenTimer').style.display = 'flex';
   }
 
   startGhostRun() {
@@ -185,6 +188,9 @@ class RunTracker {
       this.watchId = null;
     }
     clearInterval(this.timerInterval);
+
+    // Hide fullscreen timer when stopped
+    document.getElementById('fullscreenTimer').style.display = 'none';
 
     this.isTracking = false;
     this.telemetryActive = false;

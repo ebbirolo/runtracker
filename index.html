@@ -13,6 +13,16 @@
 <body>
   <div id="map"></div>
 
+  <!-- Full Screen Timer Overlay -->
+  <div id="fullscreenTimer" class="fullscreen-timer" style="display:none;">
+    <div class="timer-bg"></div>
+    <div class="timer-content">
+      <div class="big-time" id="bigTimer">00:00</div>
+      <div class="big-distance" id="bigDistance">0.00 km</div>
+      <div class="big-status" id="bigStatus">Ready</div>
+    </div>
+  </div>
+
   <div class="overlay-container">
     <div class="top-panel">
       <div class="mode-selector">
@@ -69,7 +79,7 @@
         <button id="startBtn" class="btn btn-start">Start</button>
         <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
         <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
-        <button id="settingsBtn" class="btn btn-settings" style="position:absolute;top:20px;right:20px;z-index:1000;">⚙️</button>
+        <button id="settingsBtn" class="btn btn-settings">⚙️ Settings</button>
       </div>
 
       <div class="route-controls">
@@ -83,16 +93,6 @@
         <span class="lap-label">Best:</span>
         <span class="lap-value" id="bestLap">--:--</span>
       </div>
-    </div>
-  </div>
-
-  <!-- Full Screen Timer Overlay -->
-  <div id="fullscreenTimer" class="fullscreen-timer" style="display:flex;">
-    <div class="timer-bg"></div>
-    <div class="timer-content">
-      <div class="big-time" id="bigTimer">00:00</div>
-      <div class="big-distance" id="bigDistance">0.00 km</div>
-      <div class="big-status" id="bigStatus">Ready</div>
     </div>
   </div>
 
@@ -122,8 +122,8 @@
         <input type="checkbox" id="darkModeToggle" class="toggle-checkbox">
       </div>
       <div class="setting">
-        <label>Clear All Saved Data</label>
-        <button id="clearDataBtn" class="btn btn-stop" style="margin-top:10px;">Delete All Data</button>
+        <label for="clearDataBtn">Clear All Saved Data</label>
+        <button id="clearDataBtn" class="btn btn-stop">Delete All Data</button>
       </div>
       <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
     </div>
@@ -146,15 +146,6 @@
         originalUpdateTimer();
       };
     }
-
-    // Fullscreen timer toggle
-    document.getElementById('fullscreenTimer').addEventListener('click', () => {
-      if (document.getElementById('fullscreenTimer').style.display === 'flex') {
-        document.getElementById('fullscreenTimer').style.display = 'none';
-      } else {
-        document.getElementById('fullscreenTimer').style.display = 'flex';
-      }
-    });
   </script>
 </body>
 </html>
