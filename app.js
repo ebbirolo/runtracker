@@ -2,7 +2,7 @@ class RunTracker {
   constructor() {
     this.isTracking = false;
     this.isPaused = false;
-    this.runMode = 'circuit';
+    this.runMode = 'track';
     this.startTime = null;
     this.pauseTime = null;
     this.totalPauseTime = 0;
@@ -104,7 +104,7 @@ class RunTracker {
     this.updateButtonStates();
     this.setStatus('Get ready... 3');
 
-    // Countdown before tracking starts
+    // Countdown before tracking starts (larger numbers: 3, 2, 1)
     const countdownInterval = setInterval(() => {
       this.countdown--;
       if (this.countdown > 0) {
@@ -113,7 +113,7 @@ class RunTracker {
         clearInterval(countdownInterval);
         this.startTracking();
       }
-    }, 1000);
+    }, 500);
   }
 
   startTracking() {
