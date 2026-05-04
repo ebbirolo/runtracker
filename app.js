@@ -729,3 +729,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.tracker.loadRoute = (id) => window.tracker.loadRoute(id);
+""
