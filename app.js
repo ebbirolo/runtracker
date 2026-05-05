@@ -729,4 +729,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.tracker.loadRoute = (id) => window.tracker.loadRoute(id);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js');
+  });
+}
 ""
