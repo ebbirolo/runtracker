@@ -6,119 +6,257 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Run Tracker</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.png">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="map"></div>
 
-
-  <div class="overlay-container">
-    <div class="top-panel">
-      <div class="mode-selector">
-        <button id="trackMode" class="mode-btn active">Track</button>
-        <button id="circuitMode" class="mode-btn">Circuit</button>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat">
-          <span class="stat-label">Distance</span>
-          <span class="stat-value" id="distance">0.00</span>
-          <span class="stat-unit">km</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Time</span>
-          <span class="stat-value" id="time">00:00</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Pace</span>
-          <span class="stat-value" id="pace">--:--</span>
-          <span class="stat-unit">/km</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Speed</span>
-          <span class="stat-value" id="speed">0.0</span>
-          <span class="stat-unit">km/h</span>
-        </div>
-      </div>
-
-      <div class="sectors-panel" id="sectorsPanel">
-        <div class="sector">
-          <span class="sector-label">S1</span>
-          <span class="sector-value" id="sector1">--:--</span>
-        </div>
-        <div class="sector">
-          <span class="sector-label">S2</span>
-          <span class="sector-value" id="sector2">--:--</span>
-        </div>
-        <div class="sector">
-          <span class="sector-label">S3</span>
-          <span class="sector-value" id="sector3">--:--</span>
-        </div>
-      </div>
-
-      <div class="split-display" id="splitDisplay">
-        <span id="splitText">--</span>
-      </div>
-
-      <div class="status-bar" id="statusBar">Ready</div>
-    </div>
-
-    <div class="bottom-panel">
-      <div class="controls">
-        <button id="startBtn" class="btn btn-start">Start</button>
-        <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
-        <button id="stopBtn" class="btn btn-stop" disabled>Stop</button>
-        <button id="settingsBtn" class="btn btn-settings">⚙️ Settings</button>
-      </div>
-
-      <div class="route-controls">
-        <button id="saveRouteBtn" class="btn btn-secondary" disabled>Save Route</button>
-        <button id="loadRouteBtn" class="btn btn-secondary">Load Route</button>
-      </div>
-
-      <div class="lap-display" id="lapDisplay" style="display:none;">
-        <span class="lap-label">Lap</span>
-        <span class="lap-value" id="lapCount">0</span>
-        <span class="lap-label">Best:</span>
-        <span class="lap-value" id="bestLap">--:--</span>
-      </div>
+  <!-- Fullscreen timer overlay (during run) -->
+  <div class="fullscreen-timer" id="fullscreenTimer" style="display:none;">
+    <div class="timer-content">
+      <div class="big-time" id="bigTime">00:00</div>
+      <div class="big-distance" id="bigDistance">0.00 km</div>
+      <div class="big-status" id="bigStatus">Tracking</div>
     </div>
   </div>
 
-  <div id="routeModal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <h3>Select Route</h3>
-      <ul id="routeList"></ul>
-      <button id="closeModalBtn" class="btn btn-secondary">Cancel</button>
-    </div>
-  </div>
+  <!-- Screen container -->
+  <div class="screen-container">
 
-  <div id="saveModal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <h3>Save Route</h3>
-      <input type="text" id="routeName" placeholder="Route name" class="input-field">
-      <button id="confirmSaveBtn" class="btn btn-start">Save</button>
-      <button id="cancelSaveBtn" class="btn btn-secondary">Cancel</button>
-    </div>
-  </div>
+    <!-- Tracking overlay (visible during run) -->
+    <div class="overlay-container" id="trackingOverlay">
+      <div class="top-panel">
+        <div class="stats-grid">
+          <div class="stat">
+            <span class="stat-label">Distance</span>
+            <span class="stat-value" id="distance">0.00</span>
+            <span class="stat-unit">km</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Time</span>
+            <span class="stat-value" id="time">00:00</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Pace</span>
+            <span class="stat-value" id="pace">--:--</span>
+            <span class="stat-unit">/km</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Speed</span>
+            <span class="stat-value" id="speed">0.0</span>
+            <span class="stat-unit">km/h</span>
+          </div>
+        </div>
 
-  <!-- Settings Modal -->
-  <div id="settingsModal" class="modal" style="display:none;">
-    <div class="modal-content settings-modal">
-      <h3>Settings</h3>
-      <div class="setting">
-        <label class="toggle-label">Dark Mode</label>
-        <input type="checkbox" id="darkModeToggle" class="toggle-checkbox">
+        <div class="sectors-panel" id="sectorsPanel">
+          <div class="sector">
+            <span class="sector-label">S1</span>
+            <span class="sector-value" id="sector1">--:--</span>
+          </div>
+          <div class="sector">
+            <span class="sector-label">S2</span>
+            <span class="sector-value" id="sector2">--:--</span>
+          </div>
+          <div class="sector">
+            <span class="sector-label">S3</span>
+            <span class="sector-value" id="sector3">--:--</span>
+          </div>
+        </div>
+
+        <div class="split-display" id="splitDisplay">
+          <span id="splitText">--</span>
+        </div>
+
+        <div class="status-bar" id="statusBar">Ready</div>
       </div>
-      <div class="setting">
-        <label for="clearDataBtn">Clear All Saved Data</label>
-        <button id="clearDataBtn" class="btn btn-stop">Delete All Data</button>
+
+      <div class="bottom-panel">
+        <div class="lap-display" id="lapDisplay" style="display:none;">
+          <span class="lap-label">Lap</span>
+          <span class="lap-value" id="lapCount">0</span>
+          <span class="lap-label">Best:</span>
+          <span class="lap-value" id="bestLap">--:--</span>
+        </div>
+
+        <div class="controls">
+          <button id="pauseBtn" class="btn btn-pause" disabled>Pause</button>
+          <button id="finishBtn" class="btn btn-stop">Finish</button>
+        </div>
       </div>
-      <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
     </div>
+
+    <!-- Main menu screen -->
+    <div class="screen menu-screen" id="menuScreen">
+      <div class="menu-content">
+        <div class="menu-header">
+          <h1 class="app-title">Run Tracker</h1>
+          <p class="app-subtitle">GPS-powered running companion</p>
+        </div>
+
+        <div class="menu-actions">
+          <button class="menu-btn menu-btn-primary" id="startRunBtn">
+            <span class="btn-icon">▶</span>
+            <span class="btn-text">Start Run</span>
+            <span class="btn-hint">Track your progress</span>
+          </button>
+
+          <button class="menu-btn menu-btn-secondary" id="historyBtn" disabled>
+            <span class="btn-icon">📊</span>
+            <span class="btn-text">Run History</span>
+            <span class="btn-hint" id="historyHint">No runs yet</span>
+          </button>
+
+          <button class="menu-btn menu-btn-secondary" id="routesBtn" disabled>
+            <span class="btn-icon">🗺</span>
+            <span class="btn-text">Saved Routes</span>
+            <span class="btn-hint" id="routesHint">No saved routes</span>
+          </button>
+        </div>
+
+        <div class="menu-bottom">
+          <button class="menu-btn menu-btn-ghost" id="settingsBtn">
+            <span class="btn-icon">⚙</span>
+            <span class="btn-text">Settings</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== RUN TYPE SELECTOR ======== -->
+    <div class="screen type-screen" id="typeScreen">
+      <div class="selector-content">
+        <button class="back-btn" id="backToMenu">← Back</button>
+        <h2>Choose Run Type</h2>
+        <p class="selector-desc">Select how you want to track your run</p>
+
+        <div class="type-cards">
+          <div class="type-card" data-type="track">
+            <input type="radio" name="runType" id="typeTrack" value="track" checked>
+            <div class="card-inner">
+              <span class="card-icon">📍</span>
+              <span class="card-title">Track</span>
+              <p class="card-desc">Follow a point-to-point route. You'll see sector markers and a ghost comparison vs your best time.</p>
+              <p class="card-benefit">Best for: New routes, distance challenges, head-to-head with yourself</p>
+            </div>
+          </div>
+
+          <div class="type-card" data-type="circuit">
+            <input type="radio" name="runType" id="typeCircuit" value="circuit">
+            <div class="card-inner">
+              <span class="card-icon">🔄</span>
+              <span class="card-title">Circuit</span>
+              <p class="card-desc">Run laps around your start point. The app detects when you complete each lap.</p>
+              <p class="card-benefit">Best for: Interval training, lap times, familiar loops</p>
+            </div>
+          </div>
+        </div>
+
+        <button class="menu-btn menu-btn-primary" id="startTrackingBtn" style="margin-top:8px;">
+          <span class="btn-icon">▶</span>
+          <span class="btn-text">Start Tracking</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ======== POST-RUN SCREEN ======== -->
+    <div class="screen post-run-screen" id="postRunScreen">
+      <div class="post-run-content">
+        <div class="post-run-header">
+          <div class="post-run-icon">🏁</div>
+          <h2>Run Complete</h2>
+        </div>
+
+        <div class="post-run-stats" id="postRunStats">
+          <div class="stat-block">
+            <span class="stat-val" id="postTime">00:00</span>
+            <span class="stat-lbl">Time</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-val" id="postDistance">0.00</span>
+            <span class="stat-lbl">Distance (km)</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-val" id="postPace">--:--</span>
+            <span class="stat-lbl">Pace (/km)</span>
+          </div>
+          <div class="stat-block">
+            <span class="stat-val" id="postSpeed">0.0</span>
+            <span class="stat-lbl">Avg Speed (km/h)</span>
+          </div>
+          <div class="stat-block" id="postLapBlock" style="display:none;">
+            <span class="stat-val" id="postLaps">0</span>
+            <span class="stat-lbl">Laps</span>
+          </div>
+        </div>
+
+        <div class="post-run-actions">
+          <button class="menu-btn menu-btn-secondary" id="discardRunBtn">
+            <span class="btn-icon">✕</span>
+            <span class="btn-text">Discard</span>
+          </button>
+          <button class="menu-btn menu-btn-primary" id="saveRunBtn" disabled>
+            <span class="btn-icon">✓</span>
+            <span class="btn-text">Save Run</span>
+          </button>
+          <button class="menu-btn menu-btn-ghost" id="newRunBtn">
+            <span class="btn-icon">+</span>
+            <span class="btn-text">New Run</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== HISTORY SCREEN ======== -->
+    <div class="screen history-screen" id="historyScreen">
+      <div class="history-content">
+        <div class="history-header">
+          <button class="back-btn" id="backToMenu2">← Back</button>
+          <h2>Run History</h2>
+        </div>
+        <ul class="history-list" id="historyList"></ul>
+      </div>
+    </div>
+
+    <!-- ======== ROUTES SCREEN ======== -->
+    <div class="screen routes-screen" id="routesScreen">
+      <div class="routes-content">
+        <div class="history-header">
+          <button class="back-btn" id="backToMenu3">← Back</button>
+          <h2>Saved Routes</h2>
+        </div>
+        <ul class="routes-list" id="routesList"></ul>
+      </div>
+    </div>
+
+    <!-- ======== SETTINGS MODAL ======== -->
+    <div class="modal" id="settingsModal" style="display:none;">
+      <div class="modal-content settings-modal">
+        <h3>Settings</h3>
+        <div class="setting">
+          <label class="toggle-label">Dark Mode</label>
+          <input type="checkbox" id="darkModeToggle" class="toggle-checkbox">
+        </div>
+        <div class="setting">
+          <label for="clearDataBtn">Clear All Saved Data</label>
+          <button id="clearDataBtn" class="btn btn-stop">Delete All Data</button>
+        </div>
+        <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+
+    <!-- ======== SAVE ROUTE MODAL ======== -->
+    <div class="modal" id="saveModal" style="display:none;">
+      <div class="modal-content">
+        <h3>Save Route</h3>
+        <input type="text" id="routeName" placeholder="Route name" class="input-field">
+        <button id="confirmSaveBtn" class="btn btn-start">Save</button>
+        <button id="cancelSaveBtn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

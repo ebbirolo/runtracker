@@ -1,5 +1,5 @@
 CLAUDE.md
-*.js
+
 *.css
 node_modules
 *.png

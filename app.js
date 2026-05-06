@@ -21,6 +21,7 @@ class RunTracker {
     this.bestLapTime = null;
     this.hasLeftStart = false;
     this.routeToSave = null;
+    this.pendingRun = null;
 
     this.map = null;
     this.routeLayer = null;
@@ -31,9 +32,107 @@ class RunTracker {
 
     this.initMap();
     this.bindEvents();
-    this.loadSavedRoutes();
+    this.updateMenuStates();
+    this.showScreen('menuScreen');
   }
 
+  // ======== SCREEN NAVIGATION ========
+  showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
+    document.getElementById('trackingOverlay').classList.remove('visible');
+    const el = document.getElementById(id);
+    if (el) el.classList.add('visible');
+  }
+
+  showModal(id) {
+    document.getElementById(id).style.display = 'flex';
+  }
+
+  hideModals() {
+    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+  }
+
+  // ======== MENU ========
+  updateMenuStates() {
+    const runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
+    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
+
+    const historyBtn = document.getElementById('historyBtn');
+    const routesBtn = document.getElementById('routesBtn');
+
+    if (runs.length > 0) {
+      historyBtn.disabled = false;
+      document.getElementById('historyHint').textContent = `${runs.length} run${runs.length > 1 ? 's' : ''}`;
+    } else {
+      historyBtn.disabled = true;
+      document.getElementById('historyHint').textContent = 'No runs yet';
+    }
+
+    if (routes.length > 0) {
+      routesBtn.disabled = false;
+      document.getElementById('routesHint').textContent = `${routes.length} rout${routes.length > 1 ? 'es' : 'e'}`;
+    } else {
+      routesBtn.disabled = true;
+      document.getElementById('routesHint').textContent = 'No saved routes';
+    }
+  }
+
+  // ======== HISTORY SCREEN ========
+  showHistory() {
+    const runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
+    const list = document.getElementById('historyList');
+
+    if (runs.length === 0) {
+      list.innerHTML = '<li style="color:#8E8E93;justify-content:center;">No runs yet</li>';
+    } else {
+      list.innerHTML = runs.map(r => `
+        <li>
+          <span class="history-date">${new Date(r.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+          <span class="history-details">
+            <span><span class="history-detail-val">${(r.distance / 1000).toFixed(2)}</span> km</span>
+            <span>·</span>
+            <span><span class="history-detail-val">${this.formatTime(r.time)}</span></span>
+            ${r.mode ? `<span>·</span><span>${r.mode}</span>` : ''}
+          </span>
+        </li>
+      `).join('');
+    }
+
+    this.showScreen('historyScreen');
+  }
+
+  // ======== ROUTES SCREEN ========
+  showRoutes() {
+    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
+    const list = document.getElementById('routesList');
+
+    if (routes.length === 0) {
+      list.innerHTML = '<li style="color:#8E8E93;justify-content:center;">No saved routes</li>';
+    } else {
+      list.innerHTML = routes.map(r => `
+        <li onclick="window.tracker.useRoute(${r.id})">
+          <span>${r.name}</span>
+          <span style="color:#8E8E93;font-size:12px;">${r.mode} · ${(r.distance/1000).toFixed(2)}km</span>
+        </li>
+      `).join('');
+    }
+
+    this.showScreen('routesScreen');
+  }
+
+  useRoute(routeId) {
+    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
+    const route = routes.find(r => r.id === routeId);
+    if (!route) return;
+
+    this.currentRoute = route;
+    this.hideModals();
+    this.runMode = route.mode || 'track';
+    this.showScreen('menuScreen');
+    this.setStatus(`Loaded "${route.name}" — tap Start Run to begin`);
+  }
+
+  // ======== MAP ========
   initMap() {
     this.map = L.map('map', {
       zoomControl: false,
@@ -53,37 +152,78 @@ class RunTracker {
     });
   }
 
+  // ======== EVENTS ========
   bindEvents() {
-    document.getElementById('startBtn').addEventListener('click', () => this.start());
-    document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
-    document.getElementById('stopBtn').addEventListener('click', () => this.stop());
-    document.getElementById('saveRouteBtn').addEventListener('click', () => this.showSaveModal());
-    document.getElementById('loadRouteBtn').addEventListener('click', () => this.showLoadModal());
-    document.getElementById('closeModalBtn').addEventListener('click', () => this.hideModals());
+    // Menu
+    document.getElementById('startRunBtn').addEventListener('click', () => this.showScreen('typeScreen'));
+    document.getElementById('historyBtn').addEventListener('click', () => this.showHistory());
+    document.getElementById('routesBtn').addEventListener('click', () => this.showRoutes());
+    document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
+
+    // Type selector
+    document.getElementById('backToMenu').addEventListener('click', () => this.showScreen('menuScreen'));
+    document.getElementById('startTrackingBtn').addEventListener('click', () => this.onStartTracking());
+
+    // Type card selection
+    document.querySelectorAll('.type-card').forEach(card => {
+      const radio = card.querySelector('input[type="radio"]');
+      const inner = card.querySelector('.card-inner');
+      inner.addEventListener('click', () => {
+        radio.checked = true;
+        this.runMode = radio.value;
+        document.querySelectorAll('.type-card').forEach(c => c.querySelector('.card-inner').style.borderColor = 'rgba(255,255,255,0.1)');
+        inner.style.borderColor = 'var(--success)';
+        inner.style.background = 'rgba(52, 199, 89, 0.08)';
+      });
+    });
+
+    // Post-run
+    document.getElementById('backToMenu2').addEventListener('click', () => this.showScreen('menuScreen'));
+    document.getElementById('backToMenu3').addEventListener('click', () => this.showScreen('menuScreen'));
+    document.getElementById('saveRunBtn').addEventListener('click', () => this.finalizeRun(true));
+    document.getElementById('discardRunBtn').addEventListener('click', () => this.finalizeRun(false));
+    document.getElementById('newRunBtn').addEventListener('click', () => {
+      this.hideModals();
+      this.showScreen('typeScreen');
+    });
+
+    // Modals
+    document.getElementById('closeSettingsBtn').addEventListener('click', () => this.hideModals());
     document.getElementById('confirmSaveBtn').addEventListener('click', () => this.saveRoute());
     document.getElementById('cancelSaveBtn').addEventListener('click', () => this.hideModals());
-    document.getElementById('circuitMode').addEventListener('click', () => this.setMode('circuit'));
-    document.getElementById('trackMode').addEventListener('click', () => this.setMode('track'));
-    document.getElementById('settingsBtn').addEventListener('click', () => this.showSettings());
-    document.getElementById('closeSettingsBtn').addEventListener('click', () => this.hideModals());
-    document.getElementById('darkModeToggle').addEventListener('change', (e) => this.toggleDarkMode(e));
     document.getElementById('clearDataBtn').addEventListener('click', () => this.clearAllData());
+
+    // Tracking
+    document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
+    document.getElementById('finishBtn').addEventListener('click', () => this.finishTracking());
   }
 
-  setMode(mode) {
-    this.runMode = mode;
-    document.getElementById('circuitMode').classList.toggle('active', mode === 'circuit');
-    document.getElementById('trackMode').classList.toggle('active', mode === 'track');
-    document.getElementById('lapDisplay').style.display = mode === 'circuit' ? 'flex' : 'none';
-    this.clearSectors();
-  }
+  // ======== TYPE SELECTOR -> TRACKING ========
+  onStartTracking() {
+    const selected = document.querySelector('input[name="runType"]:checked');
+    this.runMode = selected ? selected.value : 'track';
 
-  start() {
-    if (!('geolocation' in navigator)) {
-      alert('Geolocation is not supported');
-      return;
+    // Load ghost data if route selected
+    if (this.currentRoute && this.currentRoute.ghost) {
+      this.ghostData = {
+        startTime: Date.now(),
+        positions: this.currentRoute.ghost.positions,
+        totalDistance: this.currentRoute.ghost.distance
+      };
+      const ghostCoords = this.ghostData.positions.map(p => [p.latitude, p.longitude]);
+      if (this.ghostLayer) this.map.removeLayer(this.ghostLayer);
+      this.ghostLayer = L.polyline(ghostCoords, {
+        color: '#FF3B30', opacity: 0.5, weight: 4, dashArray: '10, 10'
+      }).addTo(this.map);
+
+      this.ghostMarker = L.marker(ghostCoords[0], {
+        icon: L.divIcon({ className: 'ghost-marker', html: '<div style="width:20px;height:20px;background:#FF3B30;border-radius:50%;border:3px solid white;"></div>', iconSize: [20, 20] })
+      }).addTo(this.map);
+
+      if (ghostCoords.length > 1) this.map.fitBounds(L.latLngBounds(ghostCoords), { padding: [50, 50] });
     }
 
+    // Reset state
     this.isTracking = true;
     this.isPaused = false;
     this.startTime = Date.now();
@@ -96,27 +236,41 @@ class RunTracker {
     this.currentLap = 0;
     this.lapStartTime = Date.now();
     this.lapDistance = 0;
+    this.bestLapTime = null;
     this.hasLeftStart = false;
     this.startPos = null;
     this.telemetryActive = false;
     this.countdown = 3;
+    this.routeToSave = null;
 
-    this.updateButtonStates();
+    // Switch to tracking UI
+    this.hideModals();
+    document.getElementById('menuScreen').classList.remove('visible');
+    document.getElementById('trackingOverlay').classList.add('visible');
+    document.getElementById('fullscreenTimer').style.display = 'flex';
+
+    // Countdown
     this.setStatus('Get ready... 3');
-
-    // Countdown before tracking starts (larger numbers: 3, 2, 1)
-    const countdownInterval = setInterval(() => {
-      this.countdown--;
-      if (this.countdown > 0) {
-        this.setStatus(`Get ready... ${this.countdown}`);
+    let count = 3;
+    const countInterval = setInterval(() => {
+      count--;
+      if (count > 0) {
+        this.setStatus(`Get ready... ${count}`);
       } else {
-        clearInterval(countdownInterval);
+        clearInterval(countInterval);
         this.startTracking();
       }
     }, 500);
   }
 
+  // ======== TRACKING ========
   startTracking() {
+    if (!('geolocation' in navigator)) {
+      alert('Geolocation is not supported');
+      this.finishTracking();
+      return;
+    }
+
     this.watchId = navigator.geolocation.watchPosition(
       (pos) => this.onPosition(pos),
       (err) => this.onError(err),
@@ -125,89 +279,23 @@ class RunTracker {
 
     this.timerInterval = setInterval(() => this.updateTimer(), 1000);
 
-    if (this.currentRoute && this.currentRoute.ghost) {
-      this.startGhostRun();
-    }
+    if (this.ghostData) this.startGhostRun();
 
-    // Show fullscreen timer when tracking starts
-    document.getElementById('fullscreenTimer').style.display = 'flex';
+    document.getElementById('bigStatus').textContent = 'Tracking';
   }
 
   startGhostRun() {
-    const bestRun = this.currentRoute.ghost;
-    this.ghostData = {
-      startTime: Date.now(),
-      positions: bestRun.positions,
-      totalDistance: bestRun.distance
-    };
+    if (this.ghostLayer) this.map.removeLayer(this.ghostLayer);
+    if (this.ghostMarker) this.map.removeLayer(this.ghostMarker);
 
-    if (this.ghostLayer) {
-      this.map.removeLayer(this.ghostLayer);
-    }
-
-    const ghostCoords = bestRun.positions.map(p => [p.latitude, p.longitude]);
+    const ghostCoords = this.ghostData.positions.map(p => [p.latitude, p.longitude]);
     this.ghostLayer = L.polyline(ghostCoords, {
-      color: '#FF3B30',
-      opacity: 0.5,
-      weight: 4,
-      dashArray: '10, 10'
+      color: '#FF3B30', opacity: 0.5, weight: 4, dashArray: '10, 10'
     }).addTo(this.map);
 
     this.ghostMarker = L.marker(ghostCoords[0], {
-      icon: L.divIcon({
-        className: 'ghost-marker',
-        html: '<div style="width:20px;height:20px;background:#FF3B30;border-radius:50%;border:3px solid white;"></div>',
-        iconSize: [20, 20]
-      })
+      icon: L.divIcon({ className: 'ghost-marker', html: '<div style="width:20px;height:20px;background:#FF3B30;border-radius:50%;border:3px solid white;"></div>', iconSize: [20, 20] })
     }).addTo(this.map);
-
-    if (ghostCoords.length > 1) {
-      this.map.fitBounds(L.latLngBounds(ghostCoords), { padding: [50, 50] });
-    }
-  }
-
-  togglePause() {
-    if (this.isPaused) {
-      this.isPaused = false;
-      this.startTime += Date.now() - this.pauseTime;
-      document.getElementById('pauseBtn').textContent = 'Pause';
-      this.setStatus('Tracking...');
-      this.timerInterval = setInterval(() => this.updateTimer(), 1000);
-    } else {
-      this.isPaused = true;
-      this.pauseTime = Date.now();
-      document.getElementById('pauseBtn').textContent = 'Resume';
-      this.setStatus('Paused');
-      clearInterval(this.timerInterval);
-    }
-  }
-
-  stop() {
-    if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
-      this.watchId = null;
-    }
-    clearInterval(this.timerInterval);
-
-    // Hide fullscreen timer when stopped
-    document.getElementById('fullscreenTimer').style.display = 'none';
-
-    this.isTracking = false;
-    this.telemetryActive = false;
-    this.updateButtonStates();
-    this.setStatus('Run saved');
-
-    this.saveRun();
-
-    if (this.ghostLayer) {
-      this.map.removeLayer(this.ghostLayer);
-      this.ghostLayer = null;
-    }
-    if (this.ghostMarker) {
-      this.map.removeLayer(this.ghostMarker);
-      this.ghostMarker = null;
-    }
-    this.ghostData = null;
   }
 
   onPosition(position) {
@@ -216,31 +304,19 @@ class RunTracker {
     const elapsed = timestamp - this.startTime - this.totalPauseTime;
     const speedKmh = (speed || 0) * 3.6;
 
-    // Calculate distance for this position
     let segmentDist = 0;
     if (this.positions.length > 0) {
       const lastPos = this.positions[this.positions.length - 1];
-      segmentDist = this.haversineDistance(
-        lastPos.latitude, lastPos.longitude,
-        latitude, longitude
-      );
+      segmentDist = this.haversineDistance(lastPos.latitude, lastPos.longitude, latitude, longitude);
     }
 
-    // Check if telemetry should activate (0.05km, 15s, or 1km/h)
     if (!this.telemetryActive) {
       this.totalDistance += segmentDist;
-      const shouldActivate =
-        this.totalDistance >= 50 ||           // 0.05km = 50m
-        elapsed >= 15000 ||                   // 15 seconds
-        speedKmh >= 1;                        // 1 km/h
-
+      const shouldActivate = this.totalDistance >= 50 || elapsed >= 15000 || speedKmh >= 1;
       if (shouldActivate) {
         this.telemetryActive = true;
-        this.setStatus('Tracking...');
-        // Reset distance for actual run tracking
         this.totalDistance = 0;
       } else {
-        // Still collecting positions but not tracking telemetry
         const newPos = { latitude, longitude, speed: speed || 0, timestamp, elapsed, cumulativeDistance: this.totalDistance };
         this.positions.push(newPos);
         this.startPos = this.startPos || { latitude, longitude };
@@ -250,7 +326,6 @@ class RunTracker {
     }
 
     const newPos = { latitude, longitude, speed: speed || 0, timestamp, elapsed };
-
     if (this.positions.length > 0 && this.telemetryActive) {
       this.totalDistance += segmentDist;
       newPos.cumulativeDistance = this.totalDistance;
@@ -258,7 +333,6 @@ class RunTracker {
       newPos.cumulativeDistance = 0;
       this.startPos = this.startPos || { latitude, longitude };
     }
-
     this.positions.push(newPos);
 
     if (this.runMode === 'circuit') {
@@ -268,29 +342,19 @@ class RunTracker {
     }
 
     document.getElementById('distance').textContent = (this.totalDistance / 1000).toFixed(2);
-
-    if (speed && speed > 0) {
-      document.getElementById('speed').textContent = speedKmh.toFixed(1);
-    }
-
+    if (speed && speed > 0) document.getElementById('speed').textContent = speedKmh.toFixed(1);
     this.updateMap(latitude, longitude);
     this.updateGhostComparison(elapsed, this.totalDistance);
 
     if (this.positions.length >= 10 && !this.routeToSave) {
       this.routeToSave = this.positions.slice();
-      document.getElementById('saveRouteBtn').disabled = false;
     }
   }
 
   detectLap(lat, lng) {
     if (!this.startPos) return;
-
     const distFromStart = this.haversineDistance(this.startPos.latitude, this.startPos.longitude, lat, lng);
-
-    if (!this.hasLeftStart && distFromStart > 15) {
-      this.hasLeftStart = true;
-    }
-
+    if (!this.hasLeftStart && distFromStart > 15) this.hasLeftStart = true;
     if (this.hasLeftStart && distFromStart < 15) {
       const lapTime = Date.now() - this.lapStartTime;
       this.laps.push(lapTime);
@@ -299,26 +363,20 @@ class RunTracker {
       this.lapDistance = 0;
       this.currentSector = 0;
       this.sectorStartTime = Date.now();
-
       document.getElementById('lapCount').textContent = this.currentLap;
-
       if (this.bestLapTime === null || lapTime < this.bestLapTime) {
         this.bestLapTime = lapTime;
         document.getElementById('bestLap').textContent = this.formatTime(lapTime);
       }
-
       this.clearSectors();
       this.calculateCircuitSectors();
-      this.setStatus(`Lap ${this.currentLap} started`);
     }
   }
 
   calculateCircuitSectors() {
     if (this.lapDistance === 0) return;
-
     const sectorDist = this.lapDistance / 3;
     const cumulative = this.positions.slice(-Math.min(50, this.positions.length));
-
     let s1Dist = Infinity, s2Dist = Infinity;
     for (let i = 0; i < cumulative.length; i++) {
       const d = cumulative[i].cumulativeDistance - (this.totalDistance - this.lapDistance);
@@ -326,34 +384,25 @@ class RunTracker {
       if (Math.abs(d - sectorDist * 2) < s2Dist) { s2Dist = Math.abs(d - sectorDist * 2); this.sectors.s2 = cumulative[i]; }
     }
     this.sectors.s3 = cumulative[cumulative.length - 1];
-
     this.drawSectorMarkers();
   }
 
   detectSectorsTrackMode() {
     if (!this.currentRoute || !this.currentRoute.distance) return;
-
     const totalDist = this.currentRoute.distance * 1000;
     const s1Dist = totalDist / 3;
     const s2Dist = totalDist * 2 / 3;
-
-    if (this.currentSector < 1 && this.totalDistance >= s1Dist) {
-      this.sectorComplete(1);
-    } else if (this.currentSector < 2 && this.totalDistance >= s2Dist) {
-      this.sectorComplete(2);
-    } else if (this.currentSector < 3 && this.totalDistance >= totalDist * 0.95) {
-      this.sectorComplete(3);
-    }
+    if (this.currentSector < 1 && this.totalDistance >= s1Dist) this.sectorComplete(1);
+    else if (this.currentSector < 2 && this.totalDistance >= s2Dist) this.sectorComplete(2);
+    else if (this.currentSector < 3 && this.totalDistance >= totalDist * 0.95) this.sectorComplete(3);
   }
 
   sectorComplete(num) {
     this.currentSector = num;
     const sectorTime = Date.now() - this.sectorStartTime;
     this.sectorStartTime = Date.now();
-
     const el = document.getElementById(`sector${num}`);
     el.textContent = this.formatTime(sectorTime);
-
     if (this.currentRoute && this.currentRoute.bestSectors && this.currentRoute.bestSectors[num - 1]) {
       const best = this.currentRoute.bestSectors[num - 1];
       const diff = sectorTime - best;
@@ -364,15 +413,11 @@ class RunTracker {
 
   drawSectorMarkers() {
     this.clearSectors();
-
     Object.values(this.sectors).forEach((sector, idx) => {
       if (sector) {
         const marker = L.circleMarker([sector.latitude, sector.longitude], {
-          radius: 8,
-          color: ['#007AFF', '#FF9500', '#34C759'][idx],
-          fillColor: ['#007AFF', '#FF9500', '#34C759'][idx],
-          fillOpacity: 0.8,
-          weight: 2
+          radius: 8, color: ['#007AFF', '#FF9500', '#34C759'][idx],
+          fillColor: ['#007AFF', '#FF9500', '#34C759'][idx], fillOpacity: 0.8, weight: 2
         }).addTo(this.map);
         this.sectorMarkers.push(marker);
       }
@@ -386,20 +431,16 @@ class RunTracker {
 
   updateGhostComparison(elapsed, distance) {
     if (!this.ghostData) return;
-
     const ghostPos = this.interpolateGhost(elapsed);
     if (!ghostPos) return;
-
     const ghostElapsed = this.getGhostTimeAtDistance(distance);
     if (ghostElapsed === null) return;
-
     const diff = elapsed - ghostElapsed;
     const sign = diff >= 0 ? '+' : '-';
     const absDiff = Math.abs(diff);
 
     const splitEl = document.getElementById('splitDisplay');
     const splitText = document.getElementById('splitText');
-
     if (absDiff < 1000) {
       splitText.textContent = `${sign}${(absDiff / 1000).toFixed(1)}s vs ghost`;
       splitEl.className = `split-display ${diff < 0 ? 'ahead' : 'behind'}`;
@@ -410,9 +451,7 @@ class RunTracker {
       splitEl.className = `split-display ${diff < 0 ? 'ahead' : 'behind'}`;
     }
 
-    if (this.ghostMarker && ghostPos) {
-      this.ghostMarker.setLatLng([ghostPos.latitude, ghostPos.longitude]);
-    }
+    if (this.ghostMarker) this.ghostMarker.setLatLng([ghostPos.latitude, ghostPos.longitude]);
   }
 
   interpolateGhost(elapsed) {
@@ -446,9 +485,9 @@ class RunTracker {
 
   updateTimer() {
     if (!this.startTime || this.isPaused) return;
-
     const elapsed = Date.now() - this.startTime - this.totalPauseTime;
     document.getElementById('time').textContent = this.formatTime(elapsed);
+    document.getElementById('bigTime').textContent = this.formatTime(elapsed);
 
     if (this.totalDistance > 0) {
       const distanceKm = this.totalDistance / 1000;
@@ -456,19 +495,15 @@ class RunTracker {
       const paceMin = Math.floor(paceSeconds / 60);
       const paceSec = Math.floor(paceSeconds % 60);
       document.getElementById('pace').textContent = `${String(paceMin).padStart(2, '0')}:${String(paceSec).padStart(2, '0')}`;
+      document.getElementById('bigDistance').textContent = `${distanceKm.toFixed(2)} km`;
     }
 
     if (this.runMode === 'circuit' && this.hasLeftStart) {
       const lapElapsed = Date.now() - this.lapStartTime;
       const sectorElapsed = Date.now() - this.sectorStartTime;
-
-      if (this.currentSector === 0 && lapElapsed > 0) {
-        document.getElementById('sector1').textContent = this.formatTime(sectorElapsed);
-      } else if (this.currentSector === 1) {
-        document.getElementById('sector2').textContent = this.formatTime(sectorElapsed);
-      } else if (this.currentSector === 2) {
-        document.getElementById('sector3').textContent = this.formatTime(sectorElapsed);
-      }
+      if (this.currentSector === 0 && lapElapsed > 0) document.getElementById('sector1').textContent = this.formatTime(sectorElapsed);
+      else if (this.currentSector === 1) document.getElementById('sector2').textContent = this.formatTime(sectorElapsed);
+      else if (this.currentSector === 2) document.getElementById('sector3').textContent = this.formatTime(sectorElapsed);
     }
   }
 
@@ -477,74 +512,131 @@ class RunTracker {
       this.userMarker.setLatLng([lat, lng]);
     } else {
       this.userMarker = L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: 'user-marker',
-          html: '<div style="width:16px;height:16px;background:#34C759;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
-          iconSize: [16, 16]
-        })
+        icon: L.divIcon({ className: 'user-marker', html: '<div style="width:16px;height:16px;background:#34C759;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>', iconSize: [16, 16] })
       }).addTo(this.map);
     }
 
-    if (this.currentLayer) {
-      this.map.removeLayer(this.currentLayer);
-    }
-
+    if (this.currentLayer) this.map.removeLayer(this.currentLayer);
     const coords = this.positions.map(p => [p.latitude, p.longitude]);
-    this.currentLayer = L.polyline(coords, {
-      color: '#34C759',
-      opacity: 0.8,
-      weight: 5
-    }).addTo(this.map);
+    this.currentLayer = L.polyline(coords, { color: '#34C759', opacity: 0.8, weight: 5 }).addTo(this.map);
 
-    if (this.positions.length > 5) {
-      this.map.setView([lat, lng], 17);
+    if (this.positions.length > 5) this.map.setView([lat, lng], 17);
+  }
+
+  setStatus(msg) {
+    document.getElementById('statusBar').textContent = msg;
+    document.getElementById('bigStatus').textContent = msg;
+  }
+
+  // ======== TRACKING CONTROLS ========
+  togglePause() {
+    if (this.isPaused) {
+      this.isPaused = false;
+      this.startTime += Date.now() - this.pauseTime;
+      document.getElementById('pauseBtn').textContent = 'Pause';
+      document.getElementById('bigStatus').textContent = 'Tracking';
+      this.timerInterval = setInterval(() => this.updateTimer(), 1000);
+    } else {
+      this.isPaused = true;
+      this.pauseTime = Date.now();
+      document.getElementById('pauseBtn').textContent = 'Resume';
+      document.getElementById('bigStatus').textContent = 'Paused';
+      clearInterval(this.timerInterval);
     }
   }
 
-  saveRun() {
-    const run = {
+  finishTracking() {
+    if (this.watchId !== null) { navigator.geolocation.clearWatch(this.watchId); this.watchId = null; }
+    clearInterval(this.timerInterval);
+
+    this.isTracking = false;
+    this.isPaused = false;
+    this.telemetryActive = false;
+    this.timerInterval = null;
+
+    document.getElementById('fullscreenTimer').style.display = 'none';
+    document.getElementById('trackingOverlay').classList.remove('visible');
+
+    // Save pending run for post-run screen
+    const elapsed = Date.now() - this.startTime - this.totalPauseTime;
+    this.pendingRun = {
       id: Date.now(),
       date: new Date().toISOString(),
       routeId: this.currentRoute?.id,
       mode: this.runMode,
       distance: this.totalDistance,
-      time: this.totalDistance / 1000 > 0 ? this.totalPauseTime : Date.now() - this.startTime - this.totalPauseTime,
+      time: elapsed,
       positions: this.positions.map(p => ({ ...p })),
-      laps: this.laps,
-      sectors: this.sectors
+      laps: [...this.laps],
+      sectors: { ...this.sectors },
+      bestLapTime: this.bestLapTime
     };
 
-    let runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
-    runs.unshift(run);
-    runs = runs.slice(0, 20);
-    localStorage.setItem('runHistory', JSON.stringify(runs));
+    // Show post-run screen
+    document.getElementById('postTime').textContent = this.formatTime(elapsed);
+    document.getElementById('postDistance').textContent = (this.totalDistance / 1000).toFixed(2);
+    document.getElementById('postSpeed').textContent = elapsed > 0 ? ((this.totalDistance / 1000) / (elapsed / 3600000)).toFixed(1) : '0.0';
 
-    if (this.currentRoute) {
-      this.updateBestTime(run);
+    const distanceKm = this.totalDistance / 1000;
+    if (distanceKm > 0) {
+      const paceSeconds = elapsed / 1000 / distanceKm;
+      const paceMin = Math.floor(paceSeconds / 60);
+      const paceSec = Math.floor(paceSeconds % 60);
+      document.getElementById('postPace').textContent = `${String(paceMin).padStart(2, '0')}:${String(paceSec).padStart(2, '0')}`;
+    } else {
+      document.getElementById('postPace').textContent = '--:--';
+    }
+
+    if (this.runMode === 'circuit' && this.laps.length > 0) {
+      document.getElementById('postLaps').textContent = this.laps.length;
+      document.getElementById('postLapBlock').style.display = 'flex';
+    } else {
+      document.getElementById('postLapBlock').style.display = 'none';
+    }
+
+    // Enable save only if we have data
+    document.getElementById('saveRunBtn').disabled = this.totalDistance < 10 || this.positions.length < 5;
+    this.showScreen('postRunScreen');
+  }
+
+  // ======== POST-RUN ========
+  finalizeRun(save) {
+    if (save && this.pendingRun) {
+      let runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
+      runs.unshift(this.pendingRun);
+      runs = runs.slice(0, 20);
+      localStorage.setItem('runHistory', JSON.stringify(runs));
+
+      if (this.currentRoute) this.updateBestTime(this.pendingRun);
+
+      // Save route if collected
+      if (this.routeToSave) {
+        this.showSaveModal();
+      } else {
+        this.cleanupAfterRun();
+      }
+    } else {
+      this.cleanupAfterRun();
     }
   }
 
-  updateBestTime(run) {
-    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
-    const routeIdx = routes.findIndex(r => r.id === this.currentRoute.id);
-    if (routeIdx === -1) return;
+  cleanupAfterRun() {
+    if (this.ghostLayer) { this.map.removeLayer(this.ghostLayer); this.ghostLayer = null; }
+    if (this.ghostMarker) { this.map.removeLayer(this.ghostMarker); this.ghostMarker = null; }
+    if (this.userMarker) { this.map.removeLayer(this.userMarker); this.userMarker = null; }
+    if (this.routeLayer) { this.map.removeLayer(this.routeLayer); this.routeLayer = null; }
+    this.sectorMarkers.forEach(m => this.map.removeLayer(m));
+    this.sectorMarkers = [];
+    this.ghostData = null;
+    this.currentRoute = null;
+    this.routeToSave = null;
+    this.pendingRun = null;
 
-    const elapsed = Date.now() - this.startTime - this.totalPauseTime;
-    const currentBest = routes[routeIdx].bestTime;
-
-    if (!currentBest || elapsed < currentBest) {
-      routes[routeIdx].bestTime = elapsed;
-      routes[routeIdx].ghost = {
-        positions: run.positions,
-        distance: run.distance
-      };
-      localStorage.setItem('routes', JSON.stringify(routes));
-      this.setStatus('New best time!');
-    }
+    this.updateMenuStates();
+    this.showScreen('menuScreen');
   }
 
   showSaveModal() {
-    if (!this.routeToSave) return;
     document.getElementById('saveModal').style.display = 'flex';
     document.getElementById('routeName').focus();
   }
@@ -554,13 +646,9 @@ class RunTracker {
     if (!name) return;
 
     const route = {
-      id: Date.now(),
-      name,
-      mode: this.runMode,
+      id: Date.now(), name, mode: this.runMode,
       coords: this.routeToSave.map(p => ({ latitude: p.latitude, longitude: p.longitude })),
-      distance: this.totalDistance,
-      bestTime: null,
-      bestSectors: null
+      distance: this.totalDistance, bestTime: null, bestSectors: null
     };
 
     let routes = JSON.parse(localStorage.getItem('routes') || '[]');
@@ -568,136 +656,30 @@ class RunTracker {
     localStorage.setItem('routes', JSON.stringify(routes));
 
     this.hideModals();
-    this.setStatus(`Route "${name}" saved`);
     this.routeToSave = null;
-    document.getElementById('saveRouteBtn').disabled = true;
+    this.cleanupAfterRun();
   }
 
-  showLoadModal() {
+  updateBestTime(run) {
     const routes = JSON.parse(localStorage.getItem('routes') || '[]');
-    const list = document.getElementById('routeList');
-
-    if (routes.length === 0) {
-      list.innerHTML = '<li style="color:#8E8E93;justify-content:center;">No saved routes</li>';
-    } else {
-      list.innerHTML = routes.map(r => `
-        <li onclick="window.tracker.loadRoute(${r.id})">
-          <span>${r.name}</span>
-          <span style="color:#8E8E93;font-size:12px;">${r.mode} • ${(r.distance/1000).toFixed(2)}km</span>
-        </li>
-      `).join('');
-    }
-
-    document.getElementById('loadModal').style.display = 'flex';
-  }
-
-  loadRoute(routeId) {
-    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
-    const route = routes.find(r => r.id === routeId);
-    if (!route) return;
-
-    this.currentRoute = route;
-    this.hideModals();
-
-    if (this.routeLayer) {
-      this.map.removeLayer(this.routeLayer);
-    }
-
-    const coords = route.coords.map(c => [c.latitude, c.longitude]);
-    this.routeLayer = L.polyline(coords, {
-      color: '#007AFF',
-      opacity: 0.6,
-      weight: 3,
-      dashArray: '5, 10'
-    }).addTo(this.map);
-
-    if (coords.length > 1) {
-      this.map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
-    }
-
-    if (route.bestTime) {
-      this.setStatus(`Loaded "${route.name}" - Best: ${this.formatTime(route.bestTime)}`);
-    } else {
-      this.setStatus(`Loaded "${route.name}"`);
-    }
-
-    this.drawSectorMarkersForRoute();
-  }
-
-  drawSectorMarkersForRoute() {
-    this.clearSectors();
-    if (!this.currentRoute || !this.currentRoute.coords) return;
-
-    const coords = this.currentRoute.coords;
-    const total = coords.length;
-    const s1Idx = Math.floor(total / 3);
-    const s2Idx = Math.floor(total * 2 / 3);
-
-    [s1Idx, s2Idx, total - 1].forEach((idx, i) => {
-      if (coords[idx]) {
-        const marker = L.circleMarker([coords[idx].latitude, coords[idx].longitude], {
-          radius: 8,
-          color: ['#007AFF', '#FF9500', '#34C759'][i],
-          fillColor: ['#007AFF', '#FF9500', '#34C759'][i],
-          fillOpacity: 0.8,
-          weight: 2
-        }).addTo(this.map);
-        this.sectorMarkers.push(marker);
-      }
-    });
-  }
-
-  hideModals() {
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-  }
-
-  loadSavedRoutes() {
-    const routes = JSON.parse(localStorage.getItem('routes') || '[]');
-    if (routes.length > 0) {
-      document.getElementById('saveRouteBtn').disabled = true;
+    const routeIdx = routes.findIndex(r => r.id === this.currentRoute.id);
+    if (routeIdx === -1) return;
+    const elapsed = Date.now() - this.startTime - this.totalPauseTime;
+    const currentBest = routes[routeIdx].bestTime;
+    if (!currentBest || elapsed < currentBest) {
+      routes[routeIdx].bestTime = elapsed;
+      routes[routeIdx].ghost = { positions: run.positions, distance: run.distance };
+      localStorage.setItem('routes', JSON.stringify(routes));
     }
   }
 
-  haversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000;
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  toRad(deg) { return deg * (Math.PI / 180); }
-
-  formatTime(ms) {
-    const totalSec = Math.floor(ms / 1000);
-    const mins = Math.floor(totalSec / 60);
-    const secs = totalSec % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  }
-
-  updateButtonStates() {
-    document.getElementById('startBtn').disabled = this.isTracking;
-    document.getElementById('pauseBtn').disabled = !this.isTracking;
-    document.getElementById('stopBtn').disabled = !this.isTracking;
-  }
-
-  setStatus(msg) {
-    document.getElementById('statusBar').textContent = msg;
-  }
-
+  // ======== SETTINGS ========
   showSettings() {
     const modal = document.getElementById('settingsModal');
     const darkModeToggle = document.getElementById('darkModeToggle');
-    const isDarkMode = document.body.classList.contains('light-mode');
-    darkModeToggle.checked = !isDarkMode;
-    modal.style.display = 'flex';
-  }
-
-  hideModals() {
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    const isDarkMode = !document.body.classList.contains('light-mode');
+    darkModeToggle.checked = isDarkMode;
+    this.showModal('settingsModal');
   }
 
   toggleDarkMode(e) {
@@ -720,7 +702,28 @@ class RunTracker {
         document.getElementById('clearDataBtn').textContent = 'Delete All Data';
         document.getElementById('clearDataBtn').style.background = '';
       }, 3000);
+      this.updateMenuStates();
     }
+  }
+
+  // ======== UTILITIES ========
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = this.toRad(lat2 - lat1);
+    const dLon = this.toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  toRad(deg) { return deg * (Math.PI / 180); }
+
+  formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 }
 
@@ -728,11 +731,9 @@ document.addEventListener('DOMContentLoaded', () => {
   window.tracker = new RunTracker();
 });
 
-window.tracker.loadRoute = (id) => window.tracker.loadRoute(id);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js');
   });
 }
-""
