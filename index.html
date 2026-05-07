@@ -14,13 +14,9 @@
 <body>
   <div id="map"></div>
 
-  <!-- Fullscreen timer overlay (during run) -->
-  <div class="fullscreen-timer" id="fullscreenTimer" style="display:none;">
-    <div class="timer-content">
-      <div class="big-time" id="bigTime">00:00</div>
-      <div class="big-distance" id="bigDistance">0.00 km</div>
-      <div class="big-status" id="bigStatus">Tracking</div>
-    </div>
+  <!-- Countdown overlay -->
+  <div class="countdown-overlay" id="countdownOverlay" style="display:none;">
+    <div class="countdown-number" id="countdownNumber">3</div>
   </div>
 
   <!-- Screen container -->
@@ -192,18 +188,24 @@
           </div>
         </div>
 
+        <div class="post-run-map-container" id="postRunMapWrap"></div>
+
+        <div class="post-run-save" id="postRunSaveSection" style="display:none;">
+          <input type="text" id="routeNameInline" placeholder="Name your route" class="input-field">
+          <button class="menu-btn menu-btn-primary" id="confirmSaveInlineBtn">
+            <span class="btn-icon">✓</span>
+            <span class="btn-text">Save Route</span>
+          </button>
+        </div>
+
         <div class="post-run-actions">
           <button class="menu-btn menu-btn-secondary" id="discardRunBtn">
             <span class="btn-icon">✕</span>
             <span class="btn-text">Discard</span>
           </button>
-          <button class="menu-btn menu-btn-primary" id="saveRunBtn" disabled>
-            <span class="btn-icon">✓</span>
-            <span class="btn-text">Save Run</span>
-          </button>
           <button class="menu-btn menu-btn-ghost" id="newRunBtn">
             <span class="btn-icon">+</span>
-            <span class="btn-text">New Run</span>
+            <span class="btn-text">Finish</span>
           </button>
         </div>
       </div>
@@ -244,16 +246,6 @@
           <button id="clearDataBtn" class="btn btn-stop">Delete All Data</button>
         </div>
         <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
-      </div>
-    </div>
-
-    <!-- ======== SAVE ROUTE MODAL ======== -->
-    <div class="modal" id="saveModal" style="display:none;">
-      <div class="modal-content">
-        <h3>Save Route</h3>
-        <input type="text" id="routeName" placeholder="Route name" class="input-field">
-        <button id="confirmSaveBtn" class="btn btn-start">Save</button>
-        <button id="cancelSaveBtn" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
 
