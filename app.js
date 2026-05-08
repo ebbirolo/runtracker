@@ -192,6 +192,7 @@ class RunTracker {
     document.getElementById('confirmSaveBtn').addEventListener('click', () => this.saveRoute());
     document.getElementById('cancelSaveBtn').addEventListener('click', () => this.hideModals());
     document.getElementById('clearDataBtn').addEventListener('click', () => this.clearAllData());
+    document.getElementById('darkModeToggle').addEventListener('change', (e) => this.toggleDarkMode(e));
 
     // Tracking
     document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
@@ -247,7 +248,7 @@ class RunTracker {
     this.hideModals();
     document.getElementById('menuScreen').classList.remove('visible');
     document.getElementById('trackingOverlay').classList.add('visible');
-    document.getElementById('fullscreenTimer').style.display = 'flex';
+    document.getElementById('fullscreenTimer').classList.add('visible');
 
     // Countdown
     this.setStatus('Get ready... 3');
@@ -310,20 +311,8 @@ class RunTracker {
       segmentDist = this.haversineDistance(lastPos.latitude, lastPos.longitude, latitude, longitude);
     }
 
-    if (!this.telemetryActive) {
-      this.totalDistance += segmentDist;
-      const shouldActivate = this.totalDistance >= 50 || elapsed >= 15000 || speedKmh >= 1;
-      if (shouldActivate) {
-        this.telemetryActive = true;
-        this.totalDistance = 0;
-      } else {
-        const newPos = { latitude, longitude, speed: speed || 0, timestamp, elapsed, cumulativeDistance: this.totalDistance };
-        this.positions.push(newPos);
-        this.startPos = this.startPos || { latitude, longitude };
-        this.updateMap(latitude, longitude);
-        return;
-      }
-    }
+    // Remove telemetry logic and always track position
+    this.totalDistance += segmentDist;
 
     const newPos = { latitude, longitude, speed: speed || 0, timestamp, elapsed };
     if (this.positions.length > 0 && this.telemetryActive) {
@@ -516,6 +505,7 @@ class RunTracker {
       }).addTo(this.map);
     }
 
+    // Update breadcrumb trail (polyline)
     if (this.currentLayer) this.map.removeLayer(this.currentLayer);
     const coords = this.positions.map(p => [p.latitude, p.longitude]);
     this.currentLayer = L.polyline(coords, { color: '#34C759', opacity: 0.8, weight: 5 }).addTo(this.map);
@@ -554,7 +544,7 @@ class RunTracker {
     this.telemetryActive = false;
     this.timerInterval = null;
 
-    document.getElementById('fullscreenTimer').style.display = 'none';
+    document.getElementById('fullscreenTimer').classList.remove('visible');
     document.getElementById('trackingOverlay').classList.remove('visible');
 
     // Save pending run for post-run screen

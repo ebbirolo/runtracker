@@ -19,6 +19,15 @@
     <div class="countdown-number" id="countdownNumber">3</div>
   </div>
 
+  <!-- Fullscreen timer (replaced the telemetry) -->
+  <div class="fullscreen-timer" id="fullscreenTimer" style="display:none;">
+    <div class="timer-display">
+      <span id="bigTime">00:00</span>
+      <span id="bigDistance">0.00 km</span>
+    </div>
+    <div class="status-display" id="bigStatus">Ready</div>
+  </div>
+
   <!-- Screen container -->
   <div class="screen-container">
 
@@ -202,6 +211,10 @@
           <button class="menu-btn menu-btn-secondary" id="discardRunBtn">
             <span class="btn-icon">✕</span>
             <span class="btn-text">Discard</span>
+          </button>
+          <button class="menu-btn menu-btn-primary" id="saveRunBtn">
+            <span class="btn-icon">✓</span>
+            <span class="btn-text">Save Run</span>
           </button>
           <button class="menu-btn menu-btn-ghost" id="newRunBtn">
             <span class="btn-icon">+</span>

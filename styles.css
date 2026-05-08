@@ -895,5 +895,53 @@ body.light-mode {
   --text-secondary: #8E8E93;
 }
 
+/* ======== FULLSCREEN TIMER ======== */
+.fullscreen-timer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.8);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.fullscreen-timer.visible {
+  opacity: 1;
+}
+
+.timer-display {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.timer-display #bigTime {
+  font-size: 64px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.timer-display #bigDistance {
+  font-size: 24px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+}
+
+.status-display {
+  font-size: 20px;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  font-weight: 500;
+}
+
 
 
