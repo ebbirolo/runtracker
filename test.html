@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run Tracker - Offline Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #111; color: #fff; }
+    #test-output { font-family: monospace; font-size: 12px; white-space: pre-wrap; padding: 16px; height: 100vh; overflow-y: auto; }
+    .pass { color: #34C759; }
+    .fail { color: #FF3B30; }
+    .info { color: #8E8E93; }
+    .warn { color: #FF9500; }
+    #map { width: 100%; height: 200px; background: #222; border: 1px solid #444; }
+    #controls { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px; background: rgba(0,0,0,0.9); display: flex; gap: 8px; flex-wrap: wrap; }
+    button { padding: 8px 16px; font-size: 14px; cursor: pointer; border: 1px solid #555; background: #222; color: #fff; border-radius: 6px; }
+    button:hover { background: #333; }
+    input { padding: 6px; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; width: 60px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="test-output" class="info"></div>
+  <div id="controls">
+    <button id="runAll">Run All Tests</button>
+    <button id="runLogic">Run Logic Tests Only</button>
+    <button id="runUI">Run UI Tests</button>
+    <span>Speed (km/h): <input type="range" id="speedSlider" min="3" max="20" value="8" oninput="$('speedVal').textContent=this.value"></span>
+    <span id="speedVal">8</span>
+    <span>Interval (ms): <input type="number" id="interval" value="2000" min="500" step="100"></span>
+  </div>
+
+  <script>
+    // ========== TEST LOGGING ==========
+    const out = $('test-output');
+    let passCount = 0, failCount = 0;
+    function log(msg, cls='info') { out.innerHTML += `<span class="${cls}">${msg}</span>\n`; out.scrollTop = out.scrollHeight; }
+    function pass(t) { passCount++; log(`PASS: ${t}`, 'pass'); }
+    function fail(t, e) { failCount++; log(`FAIL: ${t} — ${e?.message||e}`, 'fail'); }
+    function section(t) { log(`\n═══ ${t} ═══`, 'warn'); }
+    function $('id') { return document.getElementById(id); }
+
+    // ========== MINIMAL LEAFLET MOCK ==========
+    // Leaflet needs: L.map, L.tileLayer, L.marker, L.divIcon, L.polyline, L.circleMarker, L.latLngBounds
+    const L = {};
+    const leafletLayers = [];
+    const leafletEvents = {};
+
+    L.latLngBounds = function(min, max) {
+      return { getSouthWest: () => min, getNorthEast: () => max, getCenter: () => ({ lat: (min.lat+max.lat)/2, lng: (min.lng+max.lng)/2 }) };
+    };
+
+    L.map = function(el, opts) {
+      const map = { layers: [], events: {}, zoomControl: false, attributionControl: false, _el: el };
+      map.setView = function(ll, z) { map._view = ll; return map; };
+      map.locate = function(opts) { map._locateOpts = opts; return map; };
+      map.on = function(evt, cb) { (map.events[evt] = map.events[evt] || []).push(cb); return map; };
+      map.fire = function(evt, data) { (map.events[evt]||[]).forEach(cb => cb(data)); return map; };
+      map.addLayer = function(layer) { leafletLayers.push(layer); map.layers.push(layer); return map; };
+      map.removeLayer = function(layer) {
+        const idx = leafletLayers.indexOf(layer); if (idx > -1) leafletLayers.splice(idx, 1);
+        const idx2 = map.layers.indexOf(layer); if (idx2 > -1) map.layers.splice(idx2, 1);
+        return map;
+      };
+      map.fitBounds = function(b, opts) { return map; };
+      map.getZoom = function() { return map._zoom || 16; };
+      map.whenReady = function(cb, ctx) { setTimeout(cb.bind(ctx), 0); return true; };
+      // Simulate location found
+      setTimeout(() => {
+        map.fire('locationfound', { latlng: { lat: 40.785091, lng: -73.968285 } });
+      }, 100);
+      return map;
+    };
+
+    L.tileLayer = function(url, opts) { return L.map(null); };
+
+    function _icon(opts) { return { className: opts.className || '', html: opts.html || '', iconSize: opts.iconSize || [16,16] }; }
+    L.divIcon = function(opts) { return _icon(opts); };
+    L.icon = function(opts) { return _icon(opts); };
+
+    L.marker = function(latlng, opts) {
+      const layer = { _latlng: latlng, _icon: opts?.icon, setLatLng: function(ll) { this._latlng = ll; return this; }, addTo: function(m) { return this; } };
+      return layer;
+    };
+
+    L.polyline = function(coords, opts) {
+      const layer = { _coords: coords, opts, addLatLng: function(ll) { this._coords = this._coords || []; this._coords.push([ll[0], ll[1]]); return this; }, addTo: function(m) { return this; } };
+      return layer;
+    };
+
+    L.circleMarker = function(latlng, opts) {
+      return { _latlng: latlng, opts, addTo: function(m) { return this; } };
+    };
+
+    window.L = L;
+    // ========== GPS MOCK ==========
+    const startLat = 40.785091, startLng = -73.968285;
+    const loopRadius = 0.003; // ~300m loop
+    const loopPoints = [];
+    for (let i = 0; i <= 120; i++) {
+      const a = (i / 120) * Math.PI * 2;
+      loopPoints.push({ lat: startLat + loopRadius * Math.cos(a), lng: startLng + loopRadius * Math.sin(a) });
+    }
+    let loopIdx = 0;
+    let mockTimer = null;
+
+    const fakeGeolocation = {
+      watchPosition(cb, errCb, opts) {
+        const id = Date.now();
+        const tick = () => {
+          loopIdx = (loopIdx + 1) % loopPoints.length;
+          const p = loopPoints[loopIdx];
+          const speed = parseFloat($('speedSlider').value) * 1000 / 3600;
+          cb({ coords: { latitude: p.lat, longitude: p.lng, speed, accuracy: 5, altitude: 10, altitudeAccuracy: 10 }, timestamp: Date.now() });
+        };
+        tick();
+        mockTimer = setInterval(tick, parseInt($('interval').value));
+        return id;
+      },
+      clearWatch(id) { if (mockTimer) { clearInterval(mockTimer); mockTimer = null; } }
+    };
+    Object.defineProperty(Navigator.prototype, 'geolocation', { get() { return fakeGeolocation; }, configurable: true });
+
+    // Remove sw.js since it won't exist
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker = { register: () => Promise.resolve({ active: { scriptURL: '' } }) };
+    }
+
+    // ========== TEST SUITE ==========
+    let app;
+
+    function test(name, fn) {
+      try { fn(); return true; } catch(e) { fail(name, e); return false; }
+    }
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg || 'assertion failed');
+    }
+
+    // ---- Core Logic Tests ----
+    function runLogicTests() {
+      section('Core Logic Tests');
+
+      // Haversine
+      const ok = test('Haversine distance (short distance)', () => {
+        // Create app instance for haversine test
+        const testApp = { toRad: RunTracker.prototype.toRad, haversineDistance: RunTracker.prototype.haversineDistance };
+        const d = testApp.haversineDistance(40.785091, -73.968285, 40.785191, -73.968285);
+        assert(d > 0 && d < 100, `Expected ~11m, got ${d.toFixed(1)}m`);
+      });
+
+      test('Haversine same point returns 0', () => {
+        const testApp = { toRad: RunTracker.prototype.toRad, haversineDistance: RunTracker.prototype.haversineDistance };
+        const d = testApp.haversineDistance(40.785, -73.968, 40.785, -73.968);
+        assert(d === 0, `Expected 0, got ${d}`);
+      });
+
+      // Format time
+      test('formatTime works', () => {
+        const t = RunTracker.prototype.formatTime.call({} , 65000);
+        assert(t === '01:05', `Expected "01:05", got "${t}"`);
+      });
+
+      test('formatTime zero', () => {
+        const t = RunTracker.prototype.formatTime.call({} , 0);
+        assert(t === '00:00', `Expected "00:00", got "${t}"`);
+      });
+
+      // Lap detection logic
+      test('Lap detection triggers at proximity', () => {
+        const tracker = new RunTracker();
+        tracker.startPos = { latitude: startLat, longitude: startLng };
+        tracker.hasLeftStart = true;
+        tracker.lapStartTime = Date.now() - 300000; // 5 min ago
+        tracker.positions = [{ latitude: startLat, longitude: startLng, speed: 0, timestamp: Date.now(), elapsed: 300000, cumulativeDistance: 1500 }];
+        tracker.totalDistance = 1500;
+        tracker.lapDistance = 0;
+        tracker.laps = [];
+        tracker.currentSector = 0;
+        tracker.sectorStartTime = Date.now();
+        tracker.sectors = { s1: null, s2: null, s3: null };
+        tracker.sectorMarkers = [];
+        tracker.map = { layers: [], events: {}, setView: ()=>{}, removeLayer: ()=>{}, addLayer: ()=>{}, fitBounds: ()=>{}, getZoom: ()=>16 };
+
+        // User at start point (< 15m)
+        tracker.detectLap(startLat, startLng);
+        assert(tracker.laps.length >= 1, `Lap should have been detected, laps count: ${tracker.laps.length}`);
+      });
+
+      // Sector detection
+      test('Circuit sectors calculated', () => {
+        const tracker = new RunTracker();
+        tracker.startPos = { latitude: startLat, longitude: startLng };
+        tracker.totalDistance = 1500;
+        tracker.lapDistance = 1500;
+        tracker.positions = [];
+        for (let i = 0; i <= 20; i++) {
+          tracker.positions.push({
+            latitude: startLat + (i/20) * 0.002,
+            longitude: startLng,
+            speed: 2,
+            timestamp: Date.now(),
+            elapsed: i * 15000,
+            cumulativeDistance: i * 75
+          });
+        }
+        tracker.map = { layers: [], events: {}, setView: ()=>{}, removeLayer: ()=>{}, addLayer: ()=>{}, fitBounds: ()=>{}, getZoom: ()=>16 };
+        tracker.sectorMarkers = [];
+        tracker.calculateCircuitSectors();
+        assert(tracker.sectors.s1 !== null, 'S1 marker missing');
+        assert(tracker.sectors.s2 !== null, 'S2 marker missing');
+        assert(tracker.sectors.s3 !== null, 'S3 marker missing');
+      });
+
+      // Ghost comparison
+      test('Ghost comparison format', () => {
+        const tracker = new RunTracker();
+        tracker.ghostData = {
+          positions: [
+            { latitude: startLat, longitude: startLng, elapsed: 0, cumulativeDistance: 0 },
+            { latitude: startLat + 0.001, longitude: startLng, elapsed: 30000, cumulativeDistance: 111 },
+            { latitude: startLat + 0.002, longitude: startLng, elapsed: 60000, cumulativeDistance: 222 }
+          ],
+          distance: 222
+        };
+        tracker.interpolateGhost(15000);
+        tracker.getGhostTimeAtDistance(55);
+      });
+
+      return passCount;
+    }
+
+    // ---- UI / Integration Tests ----
+    function runUITests() {
+      section('UI Integration Tests');
+
+      // Reset app
+      const runAllBtn = $('runAll');
+      const logicBtn = $('runLogic');
+      const uiBtn = $('runUI');
+      runAllBtn.disabled = true;
+      logicBtn.disabled = true;
+      uiBtn.disabled = true;
+
+      // Create app
+      log('Creating app instance...', 'info');
+      app = new RunTracker();
+
+      test('App instance created', () => {
+        assert(app instanceof RunTracker, 'App should be RunTracker instance');
+        assert(app.map, 'Map should be initialized');
+        assert(app.positions.length === 0, 'No positions at start');
+        assert(!app.isTracking, 'Not tracking at start');
+      });
+
+      // Screen navigation
+      test('Screen navigation works', () => {
+        app.showScreen('menuScreen');
+        assert(document.getElementById('menuScreen')?.classList.contains('visible'), 'Menu screen should be visible');
+        app.showScreen('typeScreen');
+        assert(document.getElementById('typeScreen')?.classList.contains('visible'), 'Type screen should be visible');
+      });
+
+      // History screen
+      test('History screen renders', () => {
+        localStorage.removeItem('runHistory');
+        localStorage.setItem('runHistory', JSON.stringify([
+          { id: 1, date: '2026-05-08T12:00:00Z', distance: 2500, time: 900000, mode: 'track' },
+          { id: 2, date: '2026-05-07T08:00:00Z', distance: 1500, time: 600000, mode: 'circuit' }
+        ]));
+        app.showHistory();
+        const list = document.getElementById('historyList');
+        assert(list?.children.length > 0, 'History list should have items');
+      });
+
+      // Routes screen
+      test('Routes screen renders', () => {
+        localStorage.removeItem('routes');
+        localStorage.setItem('routes', JSON.stringify([
+          { id: 100, name: 'Central Park Loop', mode: 'track', distance: 3200, ghost: null }
+        ]));
+        app.showRoutes();
+        const list = document.getElementById('routesList');
+        assert(list?.children.length > 0, 'Routes list should have items');
+      });
+
+      // Menu states
+      test('Menu states update', () => {
+        app.updateMenuStates();
+        const historyBtn = document.getElementById('historyBtn');
+        assert(historyBtn.disabled === false, 'History button should be enabled with data');
+      });
+
+      // Use route
+      test('Use route loads correctly', () => {
+        app.useRoute(100);
+        assert(app.currentRoute?.id === 100, 'Route ID should match');
+        assert(app.runMode === 'track', 'Run mode should be track');
+      });
+
+      // Countdown
+      test('Countdown works', (done) => {
+        app.onStartTracking();
+        setTimeout(() => {
+          const overlay = document.getElementById('countdownOverlay');
+          const numEl = document.getElementById('countdownNumber');
+          assert(overlay?.style.display === 'flex', 'Countdown overlay should be visible');
+          assert(numEl?.textContent === '2' || numEl?.textContent === '1' || numEl?.textContent === '3',
+            `Countdown number should be changing, got: ${numEl?.textContent}`);
+        }, 600);
+      });
+
+      // Finish and check post-run
+      test('Finish tracking saves run', () => {
+        setTimeout(() => {
+          app.finishTracking();
+          const postTime = document.getElementById('postTime');
+          assert(app.pendingRun !== null, 'Pending run should exist');
+          assert(postTime?.textContent, 'Post-run time should be set');
+          const saveBtn = document.getElementById('saveRunBtn');
+          assert(saveBtn.disabled === false, 'Save button should be enabled after data collected');
+        }, 8000); // Wait for GPS positions to accumulate
+      });
+
+      // Save run
+      test('Save run to history', () => {
+        setTimeout(() => {
+          app.finalizeRun(true);
+          const runs = JSON.parse(localStorage.getItem('runHistory') || '[]');
+          assert(runs.length > 0, 'Run history should have entries');
+          assert(document.getElementById('menuScreen')?.classList.contains('visible'), 'Should be back on menu');
+        }, 14000);
+      });
+
+      // Settings modal
+      test('Settings modal toggles', () => {
+        app.showSettings();
+        const modal = document.getElementById('settingsModal');
+        assert(modal?.style.display === 'flex', 'Settings modal should be visible');
+        app.hideSettingsModal();
+        assert(modal?.style.display === 'none', 'Settings modal should be hidden');
+      });
+
+      // Dark mode
+      test('Dark mode toggle', () => {
+        const toggle = document.getElementById('darkModeToggle');
+        toggle.checked = true;
+        app.toggleDarkMode({ target: toggle });
+        assert(document.body.classList.contains('dark-mode'), 'Should be in dark mode');
+
+        toggle.checked = false;
+        app.toggleDarkMode({ target: toggle });
+        assert(document.body.classList.contains('light-mode'), 'Should be in light mode');
+      });
+
+      // Clear data
+      test('Clear all data', () => {
+        localStorage.setItem('runHistory', JSON.stringify([{id:1, date:'2026-01-01', distance:1000, time:300000}]));
+        localStorage.setItem('routes', JSON.stringify([{id:1, name:'test'}]));
+        app.clearAllData();
+        assert(JSON.parse(localStorage.getItem('runHistory') || '[]').length === 0, 'Run history should be cleared');
+        assert(JSON.parse(localStorage.getItem('routes') || '[]').length === 0, 'Routes should be cleared');
+      });
+
+      // Cleanup
+      runAllBtn.disabled = false;
+      logicBtn.disabled = false;
+      uiBtn.disabled = false;
+
+      return passCount;
+    }
+
+    // ========== BUTTON HANDLERS ==========
+    $('runLogic').onclick = () => {
+      passCount = 0; failCount = 0;
+      out.innerHTML = '';
+      runLogicTests();
+      log(`\nLogic: ${passCount} passed, ${failCount} failed`, failCount ? 'fail' : 'pass');
+    };
+
+    $('runUI').onclick = () => {
+      passCount = 0; failCount = 0;
+      out.innerHTML = '';
+      // Clean up any existing app
+      if (app) { app.hideModals(); }
+      setTimeout(() => {
+        localStorage.removeItem('runHistory');
+        localStorage.removeItem('routes');
+        runUITests();
+        setTimeout(() => {
+          log(`\nUI: ${passCount} passed, ${failCount} failed`, failCount ? 'fail' : 'pass');
+        }, 16000);
+      }, 100);
+    };
+
+    $('runAll').onclick = () => {
+      passCount = 0; failCount = 0;
+      out.innerHTML = '';
+      runLogicTests();
+      log(`\nLogic: ${passCount} passed, ${failCount} failed`, failCount ? 'fail' : 'pass');
+      log('\nStarting UI tests in 1s...', 'warn');
+      setTimeout(() => {
+        localStorage.removeItem('runHistory');
+        localStorage.removeItem('routes');
+        setTimeout(() => {
+          runUITests();
+          setTimeout(() => {
+            log(`\nUI: ${passCount} passed, ${failCount} failed`, failCount ? 'fail' : 'pass');
+            const total = $('test-output').innerHTML;
+          }, 16000);
+        }, 100);
+      }, 1000);
+    };
+
+    // Auto-run logic tests on load
+    setTimeout(() => {
+      runLogicTests();
+      log(`\nLogic: ${passCount} passed, ${failCount} failed`, failCount ? 'fail' : 'pass');
+      log('\nClick "Run UI Tests" for integration tests.', 'warn');
+    }, 200);
+  </script>
+
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js"></script>
+</body>
+</html>

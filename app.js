@@ -36,7 +36,7 @@ class RunTracker {
     this.showScreen('menuScreen');
   }
 
-  // ======== SCREEN NAVIGATION ========
+  // ======== SCREEN NAVIGATION ====
   showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
     document.getElementById('trackingOverlay').classList.remove('visible');
@@ -49,7 +49,18 @@ class RunTracker {
   }
 
   hideModals() {
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    this.hideSettingsModal();
+    this.hideSaveModal();
+  }
+
+  hideSettingsModal() {
+    const el = document.getElementById('settingsModal');
+    if (el) el.style.display = 'none';
+  }
+
+  hideSaveModal() {
+    const el = document.getElementById('saveModal');
+    if (el) el.style.display = 'none';
   }
 
   // ======== MENU ========
@@ -211,17 +222,6 @@ class RunTracker {
         positions: this.currentRoute.ghost.positions,
         totalDistance: this.currentRoute.ghost.distance
       };
-      const ghostCoords = this.ghostData.positions.map(p => [p.latitude, p.longitude]);
-      if (this.ghostLayer) this.map.removeLayer(this.ghostLayer);
-      this.ghostLayer = L.polyline(ghostCoords, {
-        color: '#FF3B30', opacity: 0.5, weight: 4, dashArray: '10, 10'
-      }).addTo(this.map);
-
-      this.ghostMarker = L.marker(ghostCoords[0], {
-        icon: L.divIcon({ className: 'ghost-marker', html: '<div style="width:20px;height:20px;background:#FF3B30;border-radius:50%;border:3px solid white;"></div>', iconSize: [20, 20] })
-      }).addTo(this.map);
-
-      if (ghostCoords.length > 1) this.map.fitBounds(L.latLngBounds(ghostCoords), { padding: [50, 50] });
     }
 
     // Reset state
@@ -240,25 +240,31 @@ class RunTracker {
     this.bestLapTime = null;
     this.hasLeftStart = false;
     this.startPos = null;
-    this.telemetryActive = false;
-    this.countdown = 3;
     this.routeToSave = null;
 
     // Switch to tracking UI
-    this.hideModals();
+    this.hideSettingsModal();
+    this.hideSaveModal();
     document.getElementById('menuScreen').classList.remove('visible');
     document.getElementById('trackingOverlay').classList.add('visible');
     document.getElementById('fullscreenTimer').classList.add('visible');
 
     // Countdown
-    this.setStatus('Get ready... 3');
+    const countdownOverlay = document.getElementById('countdownOverlay');
+    const countdownNumber = document.getElementById('countdownNumber');
+    countdownOverlay.style.display = 'flex';
     let count = 3;
+    countdownNumber.textContent = count;
     const countInterval = setInterval(() => {
       count--;
       if (count > 0) {
-        this.setStatus(`Get ready... ${count}`);
+        countdownNumber.textContent = count;
+        countdownNumber.style.animation = 'none';
+        countdownNumber.offsetHeight; // reflow
+        countdownNumber.style.animation = 'countPop 0.5s ease-out';
       } else {
         clearInterval(countInterval);
+        countdownOverlay.style.display = 'none';
         this.startTracking();
       }
     }, 500);
@@ -311,17 +317,10 @@ class RunTracker {
       segmentDist = this.haversineDistance(lastPos.latitude, lastPos.longitude, latitude, longitude);
     }
 
-    // Remove telemetry logic and always track position
     this.totalDistance += segmentDist;
 
-    const newPos = { latitude, longitude, speed: speed || 0, timestamp, elapsed };
-    if (this.positions.length > 0 && this.telemetryActive) {
-      this.totalDistance += segmentDist;
-      newPos.cumulativeDistance = this.totalDistance;
-    } else {
-      newPos.cumulativeDistance = 0;
-      this.startPos = this.startPos || { latitude, longitude };
-    }
+    const newPos = { latitude, longitude, speed: speed || 0, timestamp, elapsed, cumulativeDistance: this.totalDistance };
+    if (this.positions.length === 0) this.startPos = { latitude, longitude };
     this.positions.push(newPos);
 
     if (this.runMode === 'circuit') {
@@ -363,16 +362,25 @@ class RunTracker {
   }
 
   calculateCircuitSectors() {
-    if (this.lapDistance === 0) return;
-    const sectorDist = this.lapDistance / 3;
-    const cumulative = this.positions.slice(-Math.min(50, this.positions.length));
-    let s1Dist = Infinity, s2Dist = Infinity;
-    for (let i = 0; i < cumulative.length; i++) {
-      const d = cumulative[i].cumulativeDistance - (this.totalDistance - this.lapDistance);
-      if (Math.abs(d - sectorDist) < s1Dist) { s1Dist = Math.abs(d - sectorDist); this.sectors.s1 = cumulative[i]; }
-      if (Math.abs(d - sectorDist * 2) < s2Dist) { s2Dist = Math.abs(d - sectorDist * 2); this.sectors.s2 = cumulative[i]; }
+    if (!this.startPos) return;
+    const recent = this.positions.slice(-Math.min(50, this.positions.length));
+    let lapDist = 0;
+    for (let i = Math.max(1, recent.length - 20); i < recent.length; i++) {
+      lapDist += this.haversineDistance(recent[i - 1].latitude, recent[i - 1].longitude, recent[i].latitude, recent[i].longitude);
     }
-    this.sectors.s3 = cumulative[cumulative.length - 1];
+    if (lapDist < 10) return;
+    this.lapDistance = lapDist;
+
+    const sectorDist = lapDist / 3;
+    const lapStartDist = this.totalDistance - lapDist;
+    let s1Dist = Infinity, s2Dist = Infinity;
+    for (let i = recent.length - 20; i < recent.length; i++) {
+      const pos = this.positions[i];
+      const d = pos.cumulativeDistance - lapStartDist;
+      if (Math.abs(d - sectorDist) < s1Dist) { s1Dist = Math.abs(d - sectorDist); this.sectors.s1 = pos; }
+      if (Math.abs(d - sectorDist * 2) < s2Dist) { s2Dist = Math.abs(d - sectorDist * 2); this.sectors.s2 = pos; }
+    }
+    this.sectors.s3 = recent[recent.length - 1];
     this.drawSectorMarkers();
   }
 
@@ -430,14 +438,13 @@ class RunTracker {
 
     const splitEl = document.getElementById('splitDisplay');
     const splitText = document.getElementById('splitText');
+    splitEl.className = `split-display ${diff < 0 ? 'ahead' : 'behind'}`;
     if (absDiff < 1000) {
       splitText.textContent = `${sign}${(absDiff / 1000).toFixed(1)}s vs ghost`;
-      splitEl.className = `split-display ${diff < 0 ? 'ahead' : 'behind'}`;
     } else {
       const mins = Math.floor(absDiff / 60000);
       const secs = (absDiff % 60000) / 1000;
       splitText.textContent = `${sign}${mins}:${String(Math.floor(secs)).padStart(2, '0')} vs ghost`;
-      splitEl.className = `split-display ${diff < 0 ? 'ahead' : 'behind'}`;
     }
 
     if (this.ghostMarker) this.ghostMarker.setLatLng([ghostPos.latitude, ghostPos.longitude]);
@@ -470,6 +477,14 @@ class RunTracker {
   onError(error) {
     console.error('GPS Error:', error);
     this.setStatus('GPS signal lost');
+    if (this.isTracking && !this.isPaused) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = navigator.geolocation.watchPosition(
+        (pos) => this.onPosition(pos),
+        (err) => this.onError(err),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
   }
 
   updateTimer() {
@@ -506,9 +521,12 @@ class RunTracker {
     }
 
     // Update breadcrumb trail (polyline)
-    if (this.currentLayer) this.map.removeLayer(this.currentLayer);
-    const coords = this.positions.map(p => [p.latitude, p.longitude]);
-    this.currentLayer = L.polyline(coords, { color: '#34C759', opacity: 0.8, weight: 5 }).addTo(this.map);
+    if (!this.currentLayer) {
+      this.currentLayer = L.polyline([this.positions[0] ? [this.positions[0].latitude, this.positions[0].longitude] : [lat, lng]], { color: '#34C759', opacity: 0.8, weight: 5 }).addTo(this.map);
+    }
+    if (this.positions.length > 0) {
+      this.currentLayer.addLatLng([lat, lng]);
+    }
 
     if (this.positions.length > 5) this.map.setView([lat, lng], 17);
   }
@@ -541,7 +559,6 @@ class RunTracker {
 
     this.isTracking = false;
     this.isPaused = false;
-    this.telemetryActive = false;
     this.timerInterval = null;
 
     document.getElementById('fullscreenTimer').classList.remove('visible');
@@ -617,6 +634,7 @@ class RunTracker {
     if (this.routeLayer) { this.map.removeLayer(this.routeLayer); this.routeLayer = null; }
     this.sectorMarkers.forEach(m => this.map.removeLayer(m));
     this.sectorMarkers = [];
+    if (this.currentLayer) { this.map.removeLayer(this.currentLayer); this.currentLayer = null; }
     this.ghostData = null;
     this.currentRoute = null;
     this.routeToSave = null;
